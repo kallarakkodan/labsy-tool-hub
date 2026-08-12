@@ -4,20 +4,21 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**P0 complete (01–07) and the security core complete (08–09).** 105 tests green;
-`pnpm test:security` green, which is the stated gate on P3.
+**Resolved: 01–12.** The public read path works end to end — 202 tests green,
+`pnpm test:security` green (45 cases).
 
-Next workable, both unblocked and independent:
+You can already `curl` the catalogue and download a 2.1 GB artifact with Range
+support. What is missing is a face: everything so far is API and library.
 
-- **10** — `lib/api.ts` + `lib/validation.ts`, then 11 → 12 opens the public read
-  path and P1
-- **18** — `lib/auth.ts` + `gen:hash`, then 19 → 20 → 21 opens the auth track
+Next workable:
 
-Numeric order takes 10 next, which is the shorter road to something a person can
-actually look at.
+- **13** — app shell + header + search + health dot, then 14 → 15 → 16 finishes
+  P1 and makes the catalogue browsable in a browser
+- **18** — `lib/auth.ts` for real (currently a stub returning `false`), opening
+  the P2 admin track
 
-One commit per issue on `main`, message `feat(NN): …` closing that issue, so any
-issue can be reverted on its own.
+Numeric order takes 13. That is also the first issue that produces something to
+look at rather than something to curl.
 
 ## Dependency graph
 
