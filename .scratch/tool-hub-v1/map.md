@@ -4,22 +4,19 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**P1 is complete.** Resolved: 01–16. 208 tests green, `pnpm test:security` green.
+**Resolved: 01–16, 18.** 224 tests green, `pnpm test:security` green.
 
-The catalogue is browsable: search with ⌘K, category pills, sort, shareable
-filtered URLs, cards with copy-`curl`/`wget` snippets, and a working download
-with Range support. All four list states verified in a browser.
+Auth is real: sessions are `jose` JWE cookies and the admin scoping was verified
+end to end with a sealed cookie — anonymous sees 4 tools, a session sees 6 with
+Draft and Internal badges rendering.
 
 Next workable:
 
-- **17** — detail drawer at `/t/[slug]`. P1 *stretch*, and nothing depends on it.
-  It also owns the kebab's missing **Details** item.
-- **18** — `lib/auth.ts` for real. `isAdmin()` is still hard-coded `false`, so
-  Draft and Internal badges have never rendered against a live session. This
-  opens P2 and is the higher-value path.
+- **19** — `clientIp()` + rate limiter. Needed by 20 and independent of it.
+- **20** — login/logout routes and the login page, which needs 19.
+- **17** — detail drawer, still an optional P1 stretch nothing depends on.
 
-Recommendation: **18**. Skipping 17 for now costs nothing and the admin track is
-the larger remaining risk.
+Numeric order takes 19, then 20 → 21 → 22 opens the admin CRUD.
 
 ## Dependency graph
 
