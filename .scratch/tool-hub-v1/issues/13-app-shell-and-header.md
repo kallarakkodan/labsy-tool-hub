@@ -1,6 +1,6 @@
 # 13 — App shell, header, search input, LAN status dot
 
-Status: ready-for-agent
+Status: resolved
 Phase: P1
 Blocked by: 07, 02
 Spec: PRD §7.1, CONTEXT §5 (recipes), CONTEXT §6
@@ -27,9 +27,9 @@ the token set.
 
 ## Done when
 
-- [ ] Header matches PRD §7.1 at all three breakpoints
-- [ ] Stopping the dev server turns the dot `--danger` within one poll interval
-- [ ] Typing in search re-filters the already-hydrated list with no network request
+- [x] Header matches PRD §7.1 at all three breakpoints
+- [x] Stopping the dev server turns the dot `--danger` within one poll interval
+- [x] Typing in search re-filters the already-hydrated list with no network request
 
 ## Watch out
 
@@ -39,3 +39,49 @@ the token set.
   (PRD §13 row 13) without changing the affordance. Do not ship the hint with a
   dead shortcut behind it.
 - The dot's three states need accessible text, not colour alone.
+
+## Answer
+
+Header, search, and status dot are live and verified in a browser: ⌘K focuses
+and selects the field, typing writes `?q=ubuntu+server`, reloading that URL
+restores the query, the accent focus ring renders, the kbd hint hides once the
+field has content, and the console is clean — no hydration warnings.
+
+Three decisions that shape issues 14–16:
+
+- **The URL is the single source of truth for filter state**, written with
+  `window.history.replaceState`. Next syncs the native history methods into
+  `useSearchParams`, so every subscriber re-renders with no server round trip.
+  `router.replace` would refetch the RSC payload on every keystroke, which is
+  what CONTEXT §6 rules out. `replaceState` rather than `pushState` so typing
+  eight characters does not leave eight entries in the back stack.
+- **A `(public)` route group** now owns the header. `/admin` has its own chrome
+  (PRD §10), and an admin screen with a public search bar across the top would
+  be a confusing surface. The route is still `/`.
+- **The version tag comes from the health response, not
+  `NEXT_PUBLIC_APP_VERSION`.** It is the version the *server* is running, which
+  is the useful number after a deploy, and it keeps `process.env` out of client
+  code (CONTEXT §3).
+
+The dot has three states rather than two, because `/api/health` answers 200 with
+`ok: false` when degraded: "up but the storage root is unwritable" has to read
+differently from "unreachable". Colour is never the only signal — there is an
+`sr-only` `role="status"` line and a visible glyph.
+
+The 6px dot is one of PRD §5.3's two `rounded-full` exceptions, carrying an
+`eslint-disable-next-line` that names the exemption — the convention issue 02
+deferred to whichever component needed it first.
+
+### Two lint errors worth the fix rather than a suppression
+
+Next 16's `react-hooks/set-state-in-effect` rejected both of my first attempts,
+correctly — each was a cascading render:
+
+- **Platform detection** for the ⌘K vs Ctrl K hint was `useState` + `useEffect`.
+  Now `useSyncExternalStore` with a `null` server snapshot: the hint renders
+  nothing during SSR, so it cannot mismatch on hydration, and there is no
+  second render to reconcile.
+- **Mirroring `filters.q` into the field** was an effect. Now it reconciles
+  *during render* against the last query seen, which is React's documented way
+  to adjust state when an input changes. The field still owns its value so
+  typing is instant, and a Back or a "clear filters" still moves it.
