@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: true
+  # Prisma's engine download runs as a build script.
+  prisma: true
+  "@prisma/client": true
+  # Not used: no remote images, no image optimisation on this deployment.
+  sharp: false
+  unrs-resolver: false

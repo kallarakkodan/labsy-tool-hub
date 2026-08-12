@@ -1,0 +1,41 @@
+{
+  "name": "labsy-tool-hub",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:security": "vitest run tests/storage.test.ts",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:clear": "tsx prisma/seed.ts --clear",
+    "gen:hash": "tsx scripts/gen-hash.ts"
+  },
+  "dependencies": {
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  },
+  "packageManager": "pnpm@11.21.0"
+}
