@@ -99,7 +99,18 @@ export const toolCreateSchema = z.object({
   file: fileSourceSchema,
 });
 
-/** Every field optional — this backs both PUT and the Published switch's PATCH. */
+/**
+ * `PUT` — a full replacement from the slide-over, which always sends every core
+ * field. `file` stays optional because editing a tool's name must not require
+ * re-selecting its bytes; omitting it keeps the current path, size, and type.
+ */
+export const toolReplaceSchema = z.object({
+  ...toolFields,
+  slug: slug.optional(),
+  file: fileSourceSchema.optional(),
+});
+
+/** Every field optional — `PATCH`, and what the Published switch sends. */
 export const toolUpdateSchema = z.object({
   name: toolFields.name.optional(),
   description: toolFields.description.optional(),
@@ -165,7 +176,19 @@ export const loginSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 
+/** `?deleteFile=true` on `DELETE /api/admin/tools/[id]` (PRD §8.2). */
+export const toolDeleteQuerySchema = z.object({
+  // Only the exact string "true" removes bytes. Anything else — absent, "1",
+  // "yes", a typo — falls back to the safe catalogue-only removal.
+  deleteFile: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+});
+
+export type FileSource = z.infer<typeof fileSourceSchema>;
 export type ToolCreateInput = z.infer<typeof toolCreateSchema>;
+export type ToolReplaceInput = z.infer<typeof toolReplaceSchema>;
 export type ToolUpdateInput = z.infer<typeof toolUpdateSchema>;
 export type ToolsQuery = z.infer<typeof toolsQuerySchema>;
 export type BrowseQuery = z.infer<typeof browseQuerySchema>;

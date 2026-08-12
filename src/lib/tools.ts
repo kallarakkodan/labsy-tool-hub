@@ -32,12 +32,25 @@ const ORDER_BY: Record<ToolsQuery["sort"], Prisma.ToolOrderByWithRelationInput> 
   size: { fileSize: "desc" },
 };
 
-export async function listTools(query: ToolsQuery, isAdmin: boolean): Promise<ToolListResult> {
-  const where: Prisma.ToolWhereInput = {
+/**
+ * The `where` behind every catalogue listing, exported so the admin list in
+ * `lib/admin-tools.ts` composes it rather than growing a second copy of the
+ * search and scoping rules.
+ */
+export function toolListWhere(query: ToolsQuery, isAdmin: boolean): Prisma.ToolWhereInput {
+  return {
     ...toolVisibilityWhere(isAdmin),
     ...searchWhere(query.q),
     ...(query.category ? { category: query.category } : {}),
   };
+}
+
+export function toolOrderBy(sort: ToolsQuery["sort"]): Prisma.ToolOrderByWithRelationInput {
+  return ORDER_BY[sort];
+}
+
+export async function listTools(query: ToolsQuery, isAdmin: boolean): Promise<ToolListResult> {
+  const where = toolListWhere(query, isAdmin);
 
   const [tools, total, categories] = await Promise.all([
     prisma.tool.findMany({
@@ -74,7 +87,7 @@ export async function findTool(idOrSlug: string, isAdmin: boolean) {
  * Deliberately ignores the active search and category filter: the pills show
  * what is available to pick, not what the current filter already narrowed to.
  */
-async function countCategories(isAdmin: boolean): Promise<CategoryCount[]> {
+export async function countCategories(isAdmin: boolean): Promise<CategoryCount[]> {
   const grouped = await prisma.tool.groupBy({
     by: ["category"],
     where: toolVisibilityWhere(isAdmin),

@@ -4,20 +4,21 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**Resolved: 01–16, 18–21.** 292 tests green, `pnpm test:security` green.
+**Resolved: 01–16, 18–22.** 331 tests green, `pnpm test:security` green.
 
-P2's auth half is done and was verified against a **production** build, not just
-`next dev`: `/admin` redirects with a `next=` pointer, `/api/browse` answers 401
-JSON, a foreign-origin POST is 403, the CSP nonce reaches every script, and the
-console is clean on the catalogue, the login page and a 404. Downloads still
-stream and honour `Range` with the guard in front.
+The whole write path works end to end through the real guard and a real session:
+create from a server path, appear publicly, flip to Draft and disappear, delete
+with the file. Path escapes are refused (`../../../etc/passwd` and `/etc/passwd`
+both 404, a directory 400s), and every mutation leaves exactly one `AuditLog`
+row carrying a relative path.
 
 Next workable:
 
-- **22** — admin tools API + `AuditLog` writes. Unblocks the whole dashboard.
+- **23** — dashboard table + Stale filter. The API it needs now exists; the
+  Stale filter will want a `stale=true` parameter added to the admin list query.
 - **17** — detail drawer, still an optional P1 stretch nothing depends on.
 
-Numeric order takes 22, then 23 → 24 → 25 finishes P2.
+Numeric order takes 23, then 24 → 25 finishes P2.
 
 ## Dependency graph
 
@@ -45,8 +46,8 @@ Numeric order takes 22, then 23 → 24 → 25 finishes P2.
 
    [18] + [19] ──▶ 20 login routes + page          ── P2 auth done
                    └─ 21 proxy guard + headers + CSRF
-                      └─ 22 admin tools API + AuditLog       ← frontier
-                         ├─ 23 dashboard table + Stale filter
+                      └─ 22 admin tools API + AuditLog
+                         ├─ 23 dashboard table + Stale filter  ← frontier
                          │  ├─ 24 form slide-over (Server Path)
                          │  └─ 25 delete dialog          ── P2 done
                          └─ 33 fileMissing sweep
@@ -140,6 +141,20 @@ Made while building:
   `connection()` and replaces Next's default 404 with a token-styled one. Every
   route is now `ƒ`. `unsafe-eval`, inline styles and the absence of
   `upgrade-insecure-requests` are all development-only branches.
+- **[22](./issues/22-admin-tools-api.md) — a typed slug collides, a derived slug
+  suffixes.** An entered slug is a decision, so a collision is `409 SLUG_TAKEN`;
+  a derived one takes the next free suffix. Deletion removes the file *then* the
+  row, so a refusal means nothing happened. `?deleteFile` must be exactly
+  `"true"`. Audit `detail` carries relative paths, because the P6 reporting UI
+  will render those rows in a browser.
+- **[22] — registering a symlink stores the target's real path,** because
+  `resolveWithinRoot` realpaths. PRD §8.2's "not a symlink" refusal therefore
+  cannot fire through the create path: it is defence for rows that stopped
+  describing what they described — hand-edited, restored from an old backup, or
+  a file swapped for a link after registration.
+- **[22] — `source: "upload"` derives `<UPLOAD_SUBDIR>/<fileName>`,** because
+  `Upload` has no column for the final path. Issue 30 must persist it; noted on
+  that ticket. Uploads using its optional `targetSubdir` will 404 until then.
 - **`⌘K` focuses the search input in v1.** The hint stays and does something real;
   it upgrades to the command palette in P6 (PRD §13 row 13) with no change to the
   affordance. Affects issue 13.

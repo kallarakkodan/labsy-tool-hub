@@ -26,6 +26,11 @@ server.
 - Response: `{ filePath, fileName, fileSize, checksum }` — `filePath` **relative
   to the storage root**.
 - Write an `upload.complete` `AuditLog` row.
+- **Persist the final relative path on the `Upload` row** (a new column).
+  Issue 22's `source: "upload"` currently derives it as
+  `<UPLOAD_SUBDIR>/<fileName>`, which cannot see the optional `targetSubdir`
+  above — such an upload 404s on tool creation. `resolveFileSource` should
+  read the stored path instead once this exists.
 
 ## Done when
 

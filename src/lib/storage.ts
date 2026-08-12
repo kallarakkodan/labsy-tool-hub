@@ -243,6 +243,68 @@ export async function statFile(relative: string): Promise<FileStat> {
   };
 }
 
+/* ============================================================================
+ * THE ONLY CODE IN THIS PRODUCT THAT DELETES A FILE.
+ *
+ * PRD §14 requires that no scheduled job anywhere in this repo removes a file
+ * from STORAGE_ROOT, and §16 D4 makes "never auto-delete" a product decision,
+ * not a default. Deletion happens only here, only when an admin explicitly asks
+ * for it (`DELETE /api/admin/tools/[id]?deleteFile=true`), and this function has
+ * exactly one caller — `deleteTool` in `lib/admin-tools.ts`. If a second caller
+ * ever appears, that is the thing to argue about in review.
+ *
+ * Three refusals, all of them from PRD §8.2:
+ *
+ *   1. **Outside the root.** The stored path is re-resolved and re-contained.
+ *      `Tool.filePath` is data in a database, not a trusted value; a row edited
+ *      by hand, restored from an old backup, or written before the root moved
+ *      must not be able to point `unlink` at `/etc`.
+ *
+ *   2. **A symlink.** Checked with `lstat` on the path *as stored*, before any
+ *      `realpath`. This is the case containment alone cannot catch: a symlink
+ *      living inside the root whose target is also inside the root passes every
+ *      containment test, and unlinking it silently destroys the link while the
+ *      admin believes they deleted the artifact.
+ *
+ *      Note when this can actually fire. Registration resolves through
+ *      `resolveWithinRoot`, which realpaths — so a tool registered *via* a
+ *      symlink stores the target's real path, and the link was only ever how
+ *      the admin addressed the file. A stored path that is still a symlink
+ *      therefore means the row has stopped describing what it described: edited
+ *      by hand, restored from an older backup, or a file swapped for a link on
+ *      disk after the fact. Refusing is right even when the target is innocent,
+ *      because in every one of those cases a human should look first.
+ *
+ *   3. **Not a regular file.** A directory, socket, or device node under the
+ *      root is not an artifact this hub registered, and `unlink` on one is
+ *      never what was meant.
+ *
+ * The "another Tool row references this path" refusal is deliberately NOT here:
+ * it needs the database, and this module does not consult the database (see the
+ * header). `deleteTool` performs that check before calling in.
+ * ========================================================================== */
+export async function deleteStoredFile(absolute: string): Promise<void> {
+  // Re-resolve through the same choke point every read path uses. Throws
+  // PATH_OUTSIDE_ROOT, NOT_FOUND, or EACCES exactly as a download would.
+  const real = await resolveStoredPath(absolute);
+
+  // lstat the path *as stored* — realpath has already followed any symlink, so
+  // asking `real` whether it is a link would always answer no.
+  const link = await lstatOrThrow(absolute, path.basename(absolute));
+  if (link.isSymbolicLink()) {
+    throw new PathError("INVALID_PATH", "Refusing to delete a symlink; remove the link by hand");
+  }
+  if (!link.isFile()) {
+    throw new PathError("INVALID_PATH", "Refusing to delete something that is not a regular file");
+  }
+
+  try {
+    await fs.unlink(real);
+  } catch (error) {
+    throw fromFsError(error, path.basename(absolute));
+  }
+}
+
 // --- internals ---------------------------------------------------------------
 
 /**

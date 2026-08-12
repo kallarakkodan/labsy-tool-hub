@@ -1,6 +1,6 @@
 import { apiError, apiFailure, rateLimited, validationFailed } from "@/lib/api";
+import { recordAudit } from "@/lib/audit";
 import { createSession, verifyPassword } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 import { checkRateLimit, clearRateLimit, recordAttempt } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/request";
 import { loginSchema } from "@/lib/validation";
@@ -35,7 +35,12 @@ export async function POST(request: Request) {
   try {
     if (!(await verifyPassword(parsed.data.password))) {
       const after = recordAttempt("login", ip);
-      await recordFailure(ip);
+      /*
+       * Only real password failures are written. A 429 is deliberately silent:
+       * the flood that triggers it is exactly the traffic that would fill the
+       * table, and the limiter already knows about it.
+       */
+      await recordAudit("auth.login.fail", { actorIp: ip });
 
       const headers: Record<string, string> = { "X-RateLimit-Remaining": String(after.remaining) };
       // The failure that used up the last attempt already knows how long the
@@ -66,19 +71,3 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-/**
- * PRD §8.1 requires failures in `AuditLog`, but a login must not 500 because
- * the audit insert did — the security control is the rate limiter, and the log
- * is the record of it.
- *
- * Only real password failures are written. A 429 is deliberately silent: the
- * flood that triggers it is exactly the traffic that would fill the table, and
- * the limiter already knows about it.
- */
-async function recordFailure(ip: string): Promise<void> {
-  try {
-    await prisma.auditLog.create({ data: { action: "auth.login.fail", actorIp: ip } });
-  } catch (error) {
-    console.error("[POST /api/auth/login] could not write the audit row", error);
-  }
-}
