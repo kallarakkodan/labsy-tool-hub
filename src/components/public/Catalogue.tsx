@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { applyFilters } from "@/lib/filters";
 import type { CategoryCount } from "@/lib/tools";
 import type { SerializedTool } from "@/types";
+import { ToolCard } from "./ToolCard";
 import { Toolbar } from "./Toolbar";
 import { useFilters } from "./use-filters";
 
@@ -28,19 +29,11 @@ export function Catalogue({ tools, categories, total }: Props) {
     <div className="flex flex-col gap-6">
       <Toolbar categories={categories} total={total} resultCount={visible.length} />
 
-      <ul className="flex flex-col gap-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {visible.map((tool) => (
-          <li
-            key={tool.id}
-            className="rounded-card border border-border bg-surface p-4 text-sm text-fg"
-          >
-            {tool.name}
-            <span className="ml-2 font-mono text-xs tabular-nums text-fg-muted">
-              {tool.category} · v{tool.version}
-            </span>
-          </li>
+          <ToolCard key={tool.id} tool={tool} />
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
