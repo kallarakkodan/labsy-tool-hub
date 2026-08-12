@@ -4,9 +4,16 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**01 resolved.** Next workable: **02** (tokens + fonts + lint rule) and **03**
-(env validation) — both unblocked, and independent of each other.
-Work in numeric order; the numbering *is* the dependency order.
+**01, 02, 03 resolved.** Next workable, all three unblocked and independent:
+
+- **04** — Prisma schema + `toolVisibilityWhere` (opens the data/API track)
+- **08** — `lib/storage.ts` (opens the security track; 09 follows immediately)
+- **18** — `lib/auth.ts` + `gen:hash` (opens the auth track)
+
+Work in numeric order unless you want to run the tracks in parallel.
+
+One commit per issue on `main`, message `feat(NN): …` closing that issue, so any
+issue can be reverted on its own.
 
 ## Dependency graph
 
