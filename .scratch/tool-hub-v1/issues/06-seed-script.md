@@ -30,7 +30,7 @@ command, or every screenshot and manual test drifts from reality.
 ## Done when
 
 - [x] `pnpm db:seed` then `pnpm db:seed:clear` returns the DB and disk to clean
-- [ ] After clear, the public page shows the exact empty-state copy from CONTEXT §10 — **deferred to issue 16**, which builds that page
+- [x] After clear, the public page shows the exact empty-state copy from CONTEXT §10 — verified in issue 16
 - [ ] Downloading a seeded tool returns the placeholder bytes — **deferred to issue 12**, which builds the download route
 - [x] `du -sh` on the seed directory reports ~0, while `ls -l` reports GB
       (proves the files are actually sparse on this filesystem)

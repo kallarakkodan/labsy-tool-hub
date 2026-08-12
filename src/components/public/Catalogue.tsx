@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { applyFilters } from "@/lib/filters";
+import { applyFilters, EMPTY_FILTERS, hasActiveFilters } from "@/lib/filters";
 import type { CategoryCount } from "@/lib/tools";
 import type { SerializedTool } from "@/types";
 import { ToolCard } from "./ToolCard";
+import { NoMatches, NoToolsYet } from "./ToolGridStates";
 import { Toolbar } from "./Toolbar";
 import { useFilters } from "./use-filters";
 
@@ -22,18 +23,30 @@ interface Props {
 }
 
 export function Catalogue({ tools, categories, total }: Props) {
-  const { filters } = useFilters();
+  const { filters, setFilters } = useFilters();
   const visible = useMemo(() => applyFilters(tools, filters), [tools, filters]);
 
   return (
     <div className="flex flex-col gap-6">
-      <Toolbar categories={categories} total={total} resultCount={visible.length} />
+      {tools.length > 0 && (
+        <Toolbar categories={categories} total={total} resultCount={visible.length} />
+      )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {visible.map((tool) => (
-          <ToolCard key={tool.id} tool={tool} />
-        ))}
-      </div>
+      {visible.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {visible.map((tool) => (
+            <ToolCard key={tool.id} tool={tool} />
+          ))}
+        </div>
+      ) : hasActiveFilters(filters) ? (
+        <NoMatches
+          query={filters.q}
+          category={filters.category}
+          onClear={() => setFilters(EMPTY_FILTERS)}
+        />
+      ) : (
+        <NoToolsYet />
+      )}
     </div>
   );
 }
