@@ -1,6 +1,6 @@
 # 09 — Path-traversal test suite
 
-Status: ready-for-agent
+Status: resolved
 Phase: Security core
 Blocked by: 08
 Spec: PRD §11.1, CONTEXT §7.1, CONTEXT §9, PRD §14 (Server browser)
@@ -31,8 +31,8 @@ This is the gate on P3 shipping — `pnpm test:security` must be green.
 
 ## Done when
 
-- [ ] `pnpm test:security` is green
-- [ ] Deliberately weakening the check to bare `startsWith(root)` makes the
+- [x] `pnpm test:security` is green — 38 tests
+- [x] Deliberately weakening the check to bare `startsWith(root)` makes the
       prefix-confusion case fail (proves the test has teeth)
 
 ## Watch out
@@ -41,3 +41,16 @@ This is the gate on P3 shipping — `pnpm test:security` must be green.
   fixture — asserting against a string is not a test of `realpath`.
 - Clean up the fixture in `afterEach`, including chmod-ing the unreadable
   directory back so the temp dir can be removed.
+
+## Answer
+
+Delivered with issue 08 in the same commit — CONTEXT §7.1 requires the suite be
+written alongside the module, and committing the boundary unproven first would
+defeat that. See issue 08's Answer for the full write-up, including the two
+mutation tests and the honest finding that the backslash folding fails no test
+on POSIX.
+
+38 tests: every row of PRD §11.1, the containment check in isolation, legitimate
+paths, `listDirectory` (`.uploads` invisible, dotfiles, escaping and broken
+symlinks omitted, sort order, the 5,000-entry cap, a named `EACCES` that does not
+leak the host path), `statFile`, and `resolveForWrite`.
