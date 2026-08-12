@@ -3,6 +3,9 @@ allowBuilds:
   # Prisma's engine download runs as a build script.
   prisma: true
   "@prisma/client": true
+  "@prisma/engines": true
   # Not used: no remote images, no image optimisation on this deployment.
   sharp: false
   unrs-resolver: false
+  # Native module behind the Prisma SQLite driver adapter (Prisma 7 requires one).
+  better-sqlite3: true

@@ -120,5 +120,15 @@ Next-specific code.** The deltas that hit this project:
 | **`next lint` removed** | `pnpm lint` calls the ESLint CLI |
 | Route types are generated | `pnpm typecheck` runs `next typegen` first, or a clean checkout fails on `LayoutProps` |
 
+**Prisma 7.9.1** also differs from PRD §6 as originally written:
+
+| Delta | Consequence here |
+|---|---|
+| Generator is `prisma-client` with an explicit `output` | Client is TypeScript in `src/generated/prisma/`, gitignored, rebuilt by `postinstall` |
+| `url = env(...)` removed from the datasource | Lives in `prisma.config.ts`, which loads `.env.local` itself — the CLI has no Next-style convention |
+| **A driver adapter is mandatory** | `@prisma/adapter-better-sqlite3`; bare `new PrismaClient()` throws |
+| Raw SQLite integers return as `BigInt` | `PRAGMA busy_timeout` is `5000n`, not `5000` |
+| `tsconfig` target must be ≥ ES2020 | Raised to ES2022 — `fileSize` is BigInt and the literals do not compile under the scaffold's ES2017 |
+
 `corepack` is unbundled from Node 25+, so pnpm is installed with `npm i -g pnpm`
 in development and in PRD §12.2's provisioning alike.

@@ -1,0 +1,74 @@
+// Data model — PRD §6. The connection URL lives in prisma.config.ts, not here:
+// Prisma 7 removed `url = env(...)` from the datasource block.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Tool {
+  id          String @id @default(cuid())
+  slug        String @unique // url-safe, derived from name, stable
+  name        String
+  description String // plain text, 2-line clamp on card
+  category    String // free text; distinct values drive filters
+  version     String // free text: "22.04.4 LTS", "v3.1.0-rc2"
+
+  filePath   String // ABSOLUTE path, must resolve under STORAGE_ROOT
+  fileName   String // basename presented to the client
+  fileSize   BigInt // bytes, snapshotted at registration. Display only — the
+  // download handler takes Content-Length from the stat (ADR-0002)
+  mimeType   String    @default("application/octet-stream")
+  checksum   String? // lowercase hex sha256
+  checksumAt DateTime?
+
+  iconUrl String? // optional image URL or /uploads/icons/... path
+  notes   String? // markdown-lite, shown in detail drawer
+
+  published   Boolean @default(true) // false = draft, invisible to everyone but admins
+  visibility  String  @default("public") // "public" | "admin" — see PRD §16 D3
+  featured    Boolean @default(false)
+  isSeed      Boolean @default(false) // enables `db:seed:clear` to purge demo rows
+  fileMissing Boolean @default(false) // set by the integrity sweep
+
+  downloadCount  Int       @default(0)
+  lastDownloadAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([published, visibility, createdAt])
+  @@index([lastDownloadAt]) // powers the stale-tool report (PRD §13 #15)
+}
+
+// In-flight chunked uploads.
+model Upload {
+  id          String   @id @default(cuid())
+  fileName    String
+  totalSize   BigInt
+  chunkSize   Int
+  totalChunks Int
+  received    String   @default("[]") // JSON array of completed chunk indices
+  tempDir     String
+  status      String   @default("pending") // pending | completed | aborted
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime // now + UPLOAD_TTL_HOURS; janitor reaps
+}
+
+// Written from P2 onward; the reporting UI is P6. The table ships now because
+// backfilling an audit trail after the fact is worse than an unused table.
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String // tool.create | tool.update | tool.delete | auth.login.fail | upload.complete
+  targetId  String?
+  detail    String? // JSON
+  actorIp   String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

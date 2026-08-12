@@ -77,7 +77,7 @@ P0–P5 constitute v1.0. P6 is post-launch.
 | Framework | Next.js 16 (App Router), React 19, TypeScript strict | Server Components keep the client bundle small; Route Handlers give raw Node streams for uploads/downloads |
 | Styling | Tailwind CSS v4 (CSS-first `@theme` config) | Design tokens live in CSS, matching §5 exactly |
 | Components | shadcn/ui (Radix primitives), Lucide icons | Accessible, unstyled-by-default, restyled to the token set |
-| Data | SQLite via Prisma, WAL mode | Single-file DB, trivial backup, zero daemon. Handles LAN-scale read load comfortably |
+| Data | SQLite via Prisma 7 + `@prisma/adapter-better-sqlite3`, WAL mode | Single-file DB, trivial backup, zero daemon. Handles LAN-scale read load comfortably. Prisma 7 requires a driver adapter; better-sqlite3 is the in-process one |
 | Validation | Zod, shared between client forms and API handlers | One schema, no drift |
 | Session | Encrypted HttpOnly cookie — JWE via `jose` (ADR-0001) | No session store needed |
 | Table | TanStack Table (headless) | Sorting/filtering on the admin dashboard without visual opinions |
@@ -150,10 +150,23 @@ Every list surface defines all four states. Loading is a **skeleton** matching f
 
 ## 6. Data model
 
+Prisma 7 changed three things this schema depends on. The live schema is
+`prisma/schema.prisma`; the block below is kept in sync with it.
+
+1. The generator is `prisma-client` (not `prisma-client-js`) and requires an
+   explicit `output`. The client is generated as TypeScript into
+   `src/generated/prisma/`, which is gitignored and rebuilt by `postinstall`.
+2. `url = env(...)` is gone from the datasource. The connection string moves to
+   `prisma.config.ts`, which also has to load `.env.local` itself — the Prisma
+   CLI has no Next-style env convention, and without it `pnpm db:push` would
+   write to a different database than the app reads.
+3. A **driver adapter is mandatory**: `new PrismaClient()` with no options
+   throws. This project uses `@prisma/adapter-better-sqlite3`.
+
 ```prisma
 // prisma/schema.prisma
-datasource db { provider = "sqlite"; url = env("DATABASE_URL") }
-generator client { provider = "prisma-client-js" }
+datasource db { provider = "sqlite" }                       // url lives in prisma.config.ts
+generator client { provider = "prisma-client"; output = "../src/generated/prisma" }
 
 model Tool {
   id           String   @id @default(cuid())
@@ -873,6 +886,7 @@ Every open question is decided. Each entry records the choice, the reasoning, an
 |---|---|
 | 2026-08-12 | Initial draft (v1.0). |
 | 2026-08-12 | `deploy/nginx.conf` → `deploy/npm-advanced.conf` in §10's tree. The file was a leftover of the app-host nginx removed later the same day; §12.4 and §12.5 already described its replacement. See `.scratch/tool-hub-v1/map.md`. |
+| 2026-08-12 | **Prisma 7.9.1 (§4, §6).** Three breaking changes from the schema as drafted: the generator is `prisma-client` with an explicit `output` (the client is now gitignored TypeScript under `src/generated/prisma/`, rebuilt by `postinstall`); `url = env(...)` left the datasource for `prisma.config.ts`, which must load `.env.local` itself or `db:push` and the app disagree about which file is the database; and a **driver adapter is mandatory** — `@prisma/adapter-better-sqlite3`. Consequential edits: `tsconfig` target raised ES2017 → ES2022, without which `BigInt` literals do not compile and §6's `fileSize` decision is unimplementable; `busy_timeout` set per connection on the adapter while `journal_mode=WAL` is applied once at boot, since the former is connection state and the latter is written into the database file. |
 | 2026-08-12 | **Stack moved to current releases at scaffold time (§4).** Next.js 15 → **16.3.0** and Node 22 LTS → **26.5.0**, on the standing instruction to track latest. Consequential edits: `middleware.ts` → `src/proxy.ts`, which in Next 16 runs on the Node runtime rather than Edge (§8.1, §10, and ADR-0001, whose original Edge-driven module split was withdrawn); `nodesource setup_26.x` and `npm i -g pnpm` replacing corepack, unbundled from Node 25+ (§12.2, §4); `nginx` dropped from the app-host package list, which §12.4 had already removed. **Accepted risk:** Node 26 is the Current line, not LTS until October 2026 — a production server is running a non-LTS runtime until then, and §12.6's release procedure should pick up 26.x LTS when it lands. Also note Turbopack is the default bundler in Next 16, so `next dev`/`next build` need no `--turbopack` flag, and `params` in route handlers and pages is now a Promise. |
 | 2026-08-12 | **App-host nginx removed.** It was carried over from a scale-shaped design that does not match this deployment: at 1 GbE the NIC caps aggregate throughput at 125 MB/s, which Node streams at roughly a quarter of one core, so `X-Accel-Redirect` bought nothing while adding a second proxy, config file, and failure surface. NPM now proxies straight to Node :3000. `USE_X_ACCEL` survives as a config flag for a co-located NPM or a future 10 GbE link (§12.4). Consequential edits: request path and rationale (§12.4); NPM target port 3000 (§12.5); download handler step order — Node streaming is now the default path, X-Accel the option (§9.4); tech stack row (§4); P5 scope (§3); capacity (§12.8); firewall (§12.6); enhancement rows #1 and #2 (§13); acceptance criteria now measure Node CPU/RSS and fd leaks rather than idleness (§14). |
 | 2026-08-12 | **D1 revised** after learning an Nginx Proxy Manager instance already fronts this service. Internal CA (`mkcert`) dropped entirely; TLS is terminated at NPM and certificate management is out of scope. §12.5 covers only the proxy-host settings the app depends on. Consequential edits: request-path diagram and app-host nginx moved to plain HTTP on `:8080` (§12.4); §12.5 rewritten as NPM configuration incl. required `proxy_request_buffering off` at both hops and the single-layer X-Accel variant; `X-Forwarded-Proto` forwarded rather than derived; threat model (§11.4); `/etc/ssl/labsy` removed from the layout and backup set (§12.1, §12.7); firewall narrowed to the NPM source address (§12.6); root-CA catalogue entry removed (§15); acceptance criteria updated (§14). |

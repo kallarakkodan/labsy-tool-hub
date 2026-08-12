@@ -45,6 +45,10 @@ yarn-error.log*
 /prisma/*.db-wal
 /prisma/*.db-shm
 
+# Prisma 7 generates the client as TypeScript source into src/. It is build
+# output, not code: `pnpm install` regenerates it via the postinstall script.
+/src/generated/
+
 # Dev STORAGE_ROOT. Artifacts are large binaries and are never version controlled
 # (PRD §12.7 excludes them from backups for the same reason).
 /storage/

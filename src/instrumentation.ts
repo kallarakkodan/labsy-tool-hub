@@ -13,4 +13,9 @@ export async function register(): Promise<void> {
 
   const { assertEnv } = await import("@/lib/env");
   assertEnv();
+
+  // journal_mode is stored in the database file, so this only has to win once —
+  // but it has to win at least once, and boot is the only place that is certain.
+  const { ensureWal } = await import("@/lib/db");
+  await ensureWal();
 }

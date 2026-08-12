@@ -191,7 +191,12 @@ Usage: `bg-surface`, `text-fg-muted`, `border-border`, `rounded-card`, `font-mon
 
 **Errors.** Handlers return `apiError(code, message, status)` from `lib/api.ts`, producing `{ error: { code, message } }`. Codes are `SCREAMING_SNAKE` and stable — the client switches on them. `console.error` the real exception server-side; never include `err.message` from an `fs` call in the response body (it contains absolute paths).
 
-**Prisma singleton** in `lib/db.ts` with the `globalThis` guard, or dev hot-reload exhausts connections. Enable WAL once at boot: `PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`.
+**Prisma singleton** in `lib/db.ts` with the `globalThis` guard, or dev hot-reload exhausts connections. It is exported as a **lazy proxy**: importing `lib/db.ts` must not construct a client, or every test and script touching the data layer would need a complete valid environment just to load the file.
+
+The two SQLite pragmas are set in different places, because they are different kinds of setting:
+
+- `busy_timeout` is **per connection** → the adapter's `timeout: 5000` in `createPrismaClient()`.
+- `journal_mode=WAL` is **a property of the database file** → `ensureWal()`, called once at boot from `instrumentation.ts`. It persists in the file header, so later connections inherit it, but it must run at least once: better-sqlite3 opens new databases in `delete` mode.
 
 **Naming.** Components `PascalCase.tsx`, everything else `kebab-case.ts`. Types in `types/index.ts`, prefixed nothing (`Tool`, not `ITool`).
 
