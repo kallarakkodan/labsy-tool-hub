@@ -4,21 +4,22 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**Resolved: 01–12.** The public read path works end to end — 202 tests green,
-`pnpm test:security` green (45 cases).
+**P1 is complete.** Resolved: 01–16. 208 tests green, `pnpm test:security` green.
 
-You can already `curl` the catalogue and download a 2.1 GB artifact with Range
-support. What is missing is a face: everything so far is API and library.
+The catalogue is browsable: search with ⌘K, category pills, sort, shareable
+filtered URLs, cards with copy-`curl`/`wget` snippets, and a working download
+with Range support. All four list states verified in a browser.
 
 Next workable:
 
-- **13** — app shell + header + search + health dot, then 14 → 15 → 16 finishes
-  P1 and makes the catalogue browsable in a browser
-- **18** — `lib/auth.ts` for real (currently a stub returning `false`), opening
-  the P2 admin track
+- **17** — detail drawer at `/t/[slug]`. P1 *stretch*, and nothing depends on it.
+  It also owns the kebab's missing **Details** item.
+- **18** — `lib/auth.ts` for real. `isAdmin()` is still hard-coded `false`, so
+  Draft and Internal badges have never rendered against a live session. This
+  opens P2 and is the higher-value path.
 
-Numeric order takes 13. That is also the first issue that produces something to
-look at rather than something to curl.
+Recommendation: **18**. Skipping 17 for now costs nothing and the admin track is
+the larger remaining risk.
 
 ## Dependency graph
 
