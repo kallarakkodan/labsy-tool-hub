@@ -1,0 +1,60 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# --- Labsy Tool Hub ---
+# Machine-local Claude Code permissions. Shared settings belong in settings.json.
+.claude/settings.local.json
+
+# Local SQLite database and Prisma migration scratch. Production DB lives at
+# /var/lib/labsy-hub/db.sqlite and is backed up by deploy/backup.sh (PRD §12.7).
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/*.db-wal
+/prisma/*.db-shm
+
+# Dev STORAGE_ROOT. Artifacts are large binaries and are never version controlled
+# (PRD §12.7 excludes them from backups for the same reason).
+/storage/
+
+# .scratch/ IS committed on purpose — it is this repo's issue tracker
+# (docs/agents/issue-tracker.md), and issues should version with the code.
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
