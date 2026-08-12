@@ -33,8 +33,13 @@ Read these before writing anything.
 > The four deltas that touch this codebase:
 >
 > - **The route guard is `src/proxy.ts`, not `middleware.ts`.** Renamed in 16, and
->   it runs on the **Node.js** runtime — not Edge, not configurable. The export is
->   `export function proxy(request)`. This is why ADR-0001 has no Edge/Node module split.
+>   it runs on the **Node.js** runtime — not Edge, not configurable (setting the
+>   `runtime` option there throws). The export is `export function proxy(request)`.
+>   This is why ADR-0001 has no Edge/Node module split. Its matcher deliberately
+>   includes `/api/**`: the CSP examples you will find all exclude it, and copying
+>   that removes the 401 guard and the CSRF check without failing anything.
+>   The CSP allows scripts by **nonce**, which means every page must render
+>   dynamically — a statically generated page carries no nonce and never hydrates.
 > - **`params` is a Promise** in route handlers and pages, as are `cookies()`,
 >   `headers()`, and `searchParams`. `await` them. `pnpm typecheck` runs
 >   `next typegen` first so the `PageProps<'/t/[slug]'>` and `RouteContext` helpers exist.

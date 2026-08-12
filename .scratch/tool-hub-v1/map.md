@@ -4,20 +4,20 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**Resolved: 01–16, 18–20.** 270 tests green, `pnpm test:security` green.
+**Resolved: 01–16, 18–21.** 292 tests green, `pnpm test:security` green.
 
-Login works end to end against a running server: correct password sets the
-cookie, the session survives later requests (4 tools anonymous, 6 signed in),
-logout clears it, six wrong passwords return 429 with `Retry-After: 900`, and a
-second IP is unaffected. Failures land in `AuditLog`.
+P2's auth half is done and was verified against a **production** build, not just
+`next dev`: `/admin` redirects with a `next=` pointer, `/api/browse` answers 401
+JSON, a foreign-origin POST is 403, the CSP nonce reaches every script, and the
+console is clean on the catalogue, the login page and a 404. Downloads still
+stream and honour `Range` with the guard in front.
 
 Next workable:
 
-- **21** — `src/proxy.ts` route guard, security headers, CSRF `Origin`/`Host`
-  check. Everything it needs now exists.
+- **22** — admin tools API + `AuditLog` writes. Unblocks the whole dashboard.
 - **17** — detail drawer, still an optional P1 stretch nothing depends on.
 
-Numeric order takes 21, then 22 opens the admin CRUD.
+Numeric order takes 22, then 23 → 24 → 25 finishes P2.
 
 ## Dependency graph
 
@@ -45,7 +45,7 @@ Numeric order takes 21, then 22 opens the admin CRUD.
 
    [18] + [19] ──▶ 20 login routes + page          ── P2 auth done
                    └─ 21 proxy guard + headers + CSRF
-                      └─ 22 admin tools API + AuditLog
+                      └─ 22 admin tools API + AuditLog       ← frontier
                          ├─ 23 dashboard table + Stale filter
                          │  ├─ 24 form slide-over (Server Path)
                          │  └─ 25 delete dialog          ── P2 done
@@ -123,6 +123,23 @@ Made while building:
   either form (plain `dotenv`, used by `prisma.config.ts`, does not un-escape);
   `gen:hash` prints the escaped line. Documented in CONTEXT §3, flagged in issue
   35 for the production runbook.
+- **[21](./issues/21-proxy-guard-and-security-headers.md) — the proxy matcher
+  includes `/api/**`.** Every CSP example excludes it; copying that would have
+  silently removed the 401 guard and the CSRF check. Only `_next/static`,
+  `_next/image` and `favicon.ico` are excluded.
+- **[21] — CSRF allows a missing `Origin` and accepts `X-Forwarded-Host`.**
+  Browsers send `Origin` on every non-GET/HEAD request, so its absence means a
+  CLI client, and CSRF needs a browser; requiring it would break `curl` to
+  defend against nothing. `X-Forwarded-Host` is accepted because not every NPM
+  configuration preserves `Host`, and rejecting on that would 403 every admin
+  mutation in production while working in dev. The check runs *before* the
+  session, so a valid cookie does not excuse a cross-origin `DELETE`.
+- **[21] — CSP allows scripts by nonce + `strict-dynamic`.** That forces dynamic
+  rendering, which broke the one static route left: `/_not-found` came back with
+  12 un-nonced scripts and never hydrated. `src/app/not-found.tsx` calls
+  `connection()` and replaces Next's default 404 with a token-styled one. Every
+  route is now `ƒ`. `unsafe-eval`, inline styles and the absence of
+  `upgrade-insecure-requests` are all development-only branches.
 - **`⌘K` focuses the search input in v1.** The hint stays and does something real;
   it upgrades to the command palette in P6 (PRD §13 row 13) with no change to the
   affordance. Affects issue 13.
