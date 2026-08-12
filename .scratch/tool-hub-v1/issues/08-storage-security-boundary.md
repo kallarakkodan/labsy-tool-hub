@@ -27,7 +27,7 @@ every filesystem operation. CONTEXT §8 puts it before any UI deliberately.
 
 ## Done when
 
-- [x] Six exports, not five — `resolveForWrite` was added; see the Answer
+- [x] Seven exports, not five — `resolveForWrite` (this issue) and `resolveStoredPath` (added by issue 12); see both Answers
 - [x] `grep -rn "node:fs" src/ --include=*.ts | grep -v lib/storage` returns nothing
       outside the upload/download stream handlers that legitimately need
       `createReadStream`/`createWriteStream` on an already-resolved path

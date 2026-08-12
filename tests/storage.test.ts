@@ -9,6 +9,7 @@ import {
   getRoot,
   listDirectory,
   resolveForWrite,
+  resolveStoredPath,
   resolveWithinRoot,
   statFile,
   toRelative,
@@ -296,5 +297,41 @@ describe("resolveForWrite", () => {
 
   it("rejects a null byte", async () => {
     await expectPathError(resolveForWrite("uploads/new\0.zip"), "INVALID_PATH");
+  });
+});
+
+describe("resolveStoredPath", () => {
+  it("accepts a stored path inside the root", async () => {
+    const stored = join(root, "isos", "ubuntu-22.04.4-live-server-amd64.iso");
+    expect(await resolveStoredPath(stored)).toBe(join(await getRoot(), "isos/ubuntu-22.04.4-live-server-amd64.iso"));
+  });
+
+  it("accepts a root whose prefix is symlinked, which relativising would break", async () => {
+    // On macOS the temp root is /var/... while its realpath is /private/var/...
+    // path.relative between the two yields a ../../.. escape; realpath does not.
+    const stored = join(base, "downloads", "labsy-deployer.zip");
+    await expect(resolveStoredPath(stored)).resolves.toContain("labsy-deployer.zip");
+  });
+
+  it("refuses a stored path outside the root even though the file exists", async () => {
+    await expectPathError(resolveStoredPath(join(evilSibling, "secrets.txt")), "PATH_OUTSIDE_ROOT");
+  });
+
+  it("refuses a stored path reached through an escaping symlink", async () => {
+    await expectPathError(resolveStoredPath(join(root, "escape-link", "secrets.txt")), "PATH_OUTSIDE_ROOT");
+  });
+
+  it("reports a deleted file as NOT_FOUND so the caller can flag it", async () => {
+    await expectPathError(resolveStoredPath(join(root, "isos", "never-existed.iso")), "NOT_FOUND");
+  });
+
+  it("names only the basename in the error, never the host path", async () => {
+    await expect(resolveStoredPath(join(root, "isos", "never-existed.iso"))).rejects.not.toThrow(
+      new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
+  });
+
+  it("rejects a null byte", async () => {
+    await expectPathError(resolveStoredPath(join(root, "a\u0000.iso")), "INVALID_PATH");
   });
 });

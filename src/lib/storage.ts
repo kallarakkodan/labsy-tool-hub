@@ -115,6 +115,41 @@ export async function resolveForWrite(relative: string): Promise<string> {
   return resolved;
 }
 
+/**
+ * Re-validate an **absolute** path already stored in the database (PRD §9.4
+ * step 2: "the DB is not trusted").
+ *
+ * Distinct from `resolveWithinRoot`, which anchors a *client-supplied relative*
+ * path at the root. Do not reach this by relativising and re-resolving: the
+ * stored path may contain a symlinked prefix that the root's realpath does not
+ * — `/var` vs `/private/var` on macOS is the everyday example — and
+ * `path.relative` between the two produces a `../../..` escape that then fails
+ * to resolve. Realpath both sides and compare, which is what this does.
+ *
+ * Errors name only the basename; the caller already has the row, and the full
+ * host path must not reach a log line that might be surfaced (CONTEXT §2 item 5).
+ */
+export async function resolveStoredPath(absolute: string): Promise<string> {
+  if (absolute.includes("\0")) {
+    throw new PathError("INVALID_PATH", "Invalid stored path");
+  }
+  if (absolute.length > MAX_PATH_LENGTH) {
+    throw new PathError("INVALID_PATH", "Stored path too long");
+  }
+
+  const root = await getRoot();
+
+  let real: string;
+  try {
+    real = await fs.realpath(absolute);
+  } catch (error) {
+    throw fromFsError(error, path.basename(absolute));
+  }
+
+  assertContained(real, root);
+  return real;
+}
+
 /** Absolute path -> path relative to the root, for sending to the client. */
 export async function toRelative(absolute: string): Promise<string> {
   return path.relative(await getRoot(), absolute);
