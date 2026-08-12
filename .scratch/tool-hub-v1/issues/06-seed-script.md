@@ -1,6 +1,6 @@
 # 06 — Seed script and purge
 
-Status: ready-for-agent
+Status: resolved
 Phase: P0
 Blocked by: 05
 Spec: PRD §15, CONTEXT §10, CONTEXT §8 step 2
@@ -29,12 +29,12 @@ command, or every screenshot and manual test drifts from reality.
 
 ## Done when
 
-- [ ] `pnpm db:seed` then `pnpm db:seed:clear` returns the DB and disk to clean
-- [ ] After clear, the public page shows the exact empty-state copy from CONTEXT §10
-- [ ] Downloading a seeded tool returns the placeholder bytes
-- [ ] `du -sh` on the seed directory reports ~0, while `ls -l` reports GB
+- [x] `pnpm db:seed` then `pnpm db:seed:clear` returns the DB and disk to clean
+- [ ] After clear, the public page shows the exact empty-state copy from CONTEXT §10 — **deferred to issue 16**, which builds that page
+- [ ] Downloading a seeded tool returns the placeholder bytes — **deferred to issue 12**, which builds the download route
+- [x] `du -sh` on the seed directory reports ~0, while `ls -l` reports GB
       (proves the files are actually sparse on this filesystem)
-- [ ] Seeding completes in under a couple of seconds despite 8.6 GB apparent
+- [x] Seeding completes in under a couple of seconds despite 8.6 GB apparent
 
 ## Watch out
 
@@ -42,3 +42,49 @@ command, or every screenshot and manual test drifts from reality.
 - `db:seed:clear` removes `STORAGE_ROOT/seed/` only — it must never walk the rest
   of the storage root. PRD §14: "No scheduled job anywhere in the repo deletes a
   file from `STORAGE_ROOT`" — this is a developer command, keep it narrow and loud.
+
+## Answer
+
+Six rows from PRD §15, sparse placeholders at their true sizes. The seeder
+reports both numbers so the ADR-0002 claim is visible every run:
+
+```
+  Seeded 6 tools into seed/
+    apparent size : 8.6 GB
+    actually used : 0 B  (sparse — ADR-0002)
+```
+
+`ls -l` shows 2.1 GB and 5.8 GB files; `du -sh storage/seed` shows `0B`.
+
+The mix exercises the states the UI needs: **Ubuntu** is `featured`,
+**Windows 11 Dev Kit** is a draft (`published: false`), and the **Intel Network
+Driver Bundle** is `visibility: "admin"` — which is literally the
+licence-restricted vendor driver PRD §16 D3 uses as its motivating example.
+Checksums are left null so the "Computing…" state is reachable.
+
+Extensions are spread across `.iso`, `.exe`, `.img`, `.zip`, and `.msi` so
+issue 15's icon map has something to map.
+
+### A real bug, caught by running it
+
+The first version of `clear()` had two defects that only showed up on execution:
+
+1. The safety guard compared `path.dirname("storage/seed")` against
+   `path.resolve(STORAGE_ROOT)` — a relative path against an absolute one. It
+   refused to delete anything, which looked like the guard working, but it was
+   comparing apples to oranges and would have refused on every machine.
+2. Worse, the guard ran **after** `deleteMany`. When it tripped, the rows were
+   already gone and the files were still on disk.
+
+Both fixed: `seedDir()` returns a resolved absolute path, and the guard runs
+before any mutation. There is a test asserting a file staged next to the seed
+directory survives a clear.
+
+Two of this issue's acceptance boxes cannot be ticked here and are carried
+forward rather than assumed: the empty-state copy needs the public page
+(issue 16) and the placeholder-bytes download needs the download route
+(issue 12). Both issues already own the relevant check.
+
+Seeding under `tsx` also needed its own `dotenv` load — nothing outside Next
+reads `.env.local`, and without it the seeder quietly builds its own database
+somewhere else. Same reason `prisma.config.ts` does it.
