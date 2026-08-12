@@ -65,6 +65,13 @@ const RELATIVE_STEPS: [limitSeconds: number, unit: Intl.RelativeTimeFormatUnit, 
  * "3 days ago" — the admin table's Updated column. `null` renders as "Never",
  * which is a real state: a tool nobody has ever downloaded is exactly what the
  * Stale filter is looking for (PRD §16 D4).
+ *
+ * **Pass `now` explicitly from anything server-rendered.** The default reads the
+ * clock, so a row rendered on the server and hydrated a second later produces
+ * "23 seconds ago" and then "24 seconds ago" — a hydration mismatch that React
+ * reports as an error and recovers from by re-rendering the whole tree. The
+ * dashboard threads one instant down from its Server Component so both sides
+ * compute the same string.
  */
 export function formatRelativeDate(date: Date | string | null, now: Date = new Date()): string {
   if (date === null) return "Never";
@@ -80,6 +87,25 @@ export function formatRelativeDate(date: Date | string | null, now: Date = new D
     }
   }
   return formatter.format(Math.round(deltaSeconds / 31_536_000), "year");
+}
+
+/**
+ * `seed/very-long-…-name.iso` — the admin table's Path column (PRD §8.2).
+ *
+ * Middle truncation rather than CSS ellipsis because the informative half of a
+ * path is at both ends: the leading directory says where it lives and the
+ * extension says what it is, while the middle is usually a version string
+ * nobody is reading at a glance. `text-overflow: ellipsis` keeps the wrong half.
+ *
+ * The ellipsis is a single U+2026, so the visible length is exactly `max`.
+ */
+export function middleTruncate(text: string, max = 32): string {
+  if (max < 3) return "…";
+  if (text.length <= max) return text;
+
+  const head = Math.ceil((max - 1) / 2);
+  const tail = Math.floor((max - 1) / 2);
+  return `${text.slice(0, head)}…${text.slice(text.length - tail)}`;
 }
 
 /** "12.4 MB/s" — upload and download progress. */

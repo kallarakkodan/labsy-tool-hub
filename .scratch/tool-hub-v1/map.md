@@ -4,21 +4,21 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**Resolved: 01–16, 18–22.** 331 tests green, `pnpm test:security` green.
+**Resolved: 01–16, 18–23.** 347 tests green, `pnpm test:security` green.
 
-The whole write path works end to end through the real guard and a real session:
-create from a server path, appear publicly, flip to Draft and disappear, delete
-with the file. Path escapes are refused (`../../../etc/passwd` and `/etc/passwd`
-both 404, a directory 400s), and every mutation leaves exactly one `AuditLog`
-row carrying a relative path.
+`/admin` is a working surface. Checked in a browser against the seeded
+catalogue: all four status chips render, Size sorts correctly across the MB/GB
+boundary (a BigInt comparator, not a string one), Stale narrows to 4 of 6 with
+never-downloaded first, Path is relative and middle-truncated, Duplicate creates
+a draft copy, and the console is clean.
 
 Next workable:
 
-- **23** — dashboard table + Stale filter. The API it needs now exists; the
-  Stale filter will want a `stale=true` parameter added to the admin list query.
+- **24** — add/edit slide-over. The table already exposes `onEdit` as an optional
+  prop and renders the button disabled until something supplies it.
 - **17** — detail drawer, still an optional P1 stretch nothing depends on.
 
-Numeric order takes 23, then 24 → 25 finishes P2.
+Numeric order takes 24, then 25 finishes P2.
 
 ## Dependency graph
 
@@ -47,8 +47,8 @@ Numeric order takes 23, then 24 → 25 finishes P2.
    [18] + [19] ──▶ 20 login routes + page          ── P2 auth done
                    └─ 21 proxy guard + headers + CSRF
                       └─ 22 admin tools API + AuditLog
-                         ├─ 23 dashboard table + Stale filter  ← frontier
-                         │  ├─ 24 form slide-over (Server Path)
+                         ├─ 23 dashboard table + Stale filter
+                         │  ├─ 24 form slide-over (Server Path)  ← frontier
                          │  └─ 25 delete dialog          ── P2 done
                          └─ 33 fileMissing sweep
 
@@ -155,6 +155,27 @@ Made while building:
 - **[22] — `source: "upload"` derives `<UPLOAD_SUBDIR>/<fileName>`,** because
   `Upload` has no column for the final path. Issue 30 must persist it; noted on
   that ticket. Uploads using its optional `targetSubdir` will 404 until then.
+- **[23](./issues/23-admin-dashboard-table.md) — the dashboard filters client-side,
+  so no `stale=true` API parameter was added** after all, reversing the note left
+  here when 22 closed. Same division as the public catalogue (CONTEXT §6):
+  `listAdminTools` stays the only place the admin scoping lives. Admin filter
+  state is deliberately *not* URL-synced — nobody pastes a link to a filtered
+  admin table, and it would be state to reconcile against the slide-over.
+- **[23] — up to two status chips, not one.** `published` and `visibility` are
+  independent, so a tool can be a draft *and* internal; one chip would hide one
+  of the two reasons it is off the public site. `Missing` replaces the lifecycle
+  chip rather than joining it.
+- **[23] — TanStack Table is v9.1.2, whose API is not v8's.** `useTable`, not
+  `useReactTable`; features registered through `tableFeatures` with row models as
+  slots; `sortFn`, not `sortingFn`. State a feature owns does not exist until the
+  feature is imported. The package ships skills under
+  `node_modules/@tanstack/react-table/skills/` — read those, not v8 examples.
+- **[23] — `formatRelativeDate` must be given a `now` from anything
+  server-rendered.** Its default reads the clock, which made the Updated column
+  render "23 seconds ago" on the server and "24 seconds ago" on the client — a
+  hydration mismatch React recovers from by regenerating the tree, invisible
+  without the console open. The dashboard pins one instant from its Server
+  Component and threads it through the table's `meta`.
 - **`⌘K` focuses the search input in v1.** The hint stays and does something real;
   it upgrades to the command palette in P6 (PRD §13 row 13) with no change to the
   affordance. Affects issue 13.
