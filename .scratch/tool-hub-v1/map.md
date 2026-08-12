@@ -4,13 +4,17 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**01, 02, 03 resolved.** Next workable, all three unblocked and independent:
+**P0 complete (01–07) and the security core complete (08–09).** 105 tests green;
+`pnpm test:security` green, which is the stated gate on P3.
 
-- **04** — Prisma schema + `toolVisibilityWhere` (opens the data/API track)
-- **08** — `lib/storage.ts` (opens the security track; 09 follows immediately)
-- **18** — `lib/auth.ts` + `gen:hash` (opens the auth track)
+Next workable, both unblocked and independent:
 
-Work in numeric order unless you want to run the tracks in parallel.
+- **10** — `lib/api.ts` + `lib/validation.ts`, then 11 → 12 opens the public read
+  path and P1
+- **18** — `lib/auth.ts` + `gen:hash`, then 19 → 20 → 21 opens the auth track
+
+Numeric order takes 10 next, which is the shorter road to something a person can
+actually look at.
 
 One commit per issue on `main`, message `feat(NN): …` closing that issue, so any
 issue can be reverted on its own.
