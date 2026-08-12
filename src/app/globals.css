@@ -1,1 +1,62 @@
 @import "tailwindcss";
+
+/*
+ * The only place colour, radius, and type are defined (CONTEXT §5, PRD §5.1).
+ * Tailwind v4 is CSS-first: these become `bg-surface`, `text-fg-muted`,
+ * `border-border`, `rounded-card`, `font-mono`, and so on.
+ *
+ * Adding a colour here is a design decision. Reaching for a default Tailwind
+ * palette class in a component is not — eslint.config.mjs rejects those.
+ */
+@theme {
+  --color-base:          #0A0A0B;
+  --color-surface:       #121214;
+  --color-surface-hover: #161618;
+  --color-inset:         #0E0E10;
+  --color-border:        #27272A;
+  --color-border-hover:  #3F3F46;
+  --color-fg:            #E4E4E7;
+  --color-fg-muted:      #71717A;
+  --color-fg-subtle:     #52525B;
+  --color-accent:        #10B981;
+  --color-accent-hover:  #34D399;
+  --color-danger:        #EF4444;
+  --color-warning:       #F59E0B;
+
+  --radius-card:   8px;
+  --radius-button: 6px;
+
+  /*
+   * CONTEXT §5 writes these as the literal family names "Inter" and
+   * "JetBrains Mono". next/font/local emits an obfuscated @font-face family and
+   * exposes it through the variable named in layout.tsx, so the literal names
+   * would silently resolve to the fallback. Point at the generated variables.
+   */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
+
+  --ease-out-quart: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-base);
+  color: var(--color-fg);
+  background-image: radial-gradient(60% 40% at 50% 0%, rgba(16, 185, 129, 0.05), transparent 100%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+/*
+ * PRD §5.3: elevation is borders, not shadows. The one permitted shadow is on
+ * modal and slide-over overlays.
+ */
+@utility shadow-overlay {
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
