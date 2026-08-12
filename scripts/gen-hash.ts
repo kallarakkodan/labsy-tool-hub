@@ -56,8 +56,22 @@ async function main(): Promise<void> {
 
   const hash = await hashPassword(password);
 
+  /*
+   * The `$` are escaped because Next loads `.env*` through dotenv-expand, which
+   * reads `$16384` as a variable reference and silently deletes it — leaving a
+   * hash that parses as nothing and a password that is rejected forever. Quoting
+   * does not prevent it; `\$` does. `lib/env.ts` refuses to boot on the mangled
+   * form, so this is belt and braces.
+   *
+   * systemd's `EnvironmentFile=` does not expand, but the escaped form is
+   * printed for both targets: one line that is correct everywhere beats two
+   * lines and a choice to get wrong at 2am.
+   */
+  const forEnvFile = hash.replaceAll("$", "\\$");
+
   console.log("\n  Paste this into .env.local (dev) or /etc/labsy-hub/env (prod):\n");
-  console.log(`ADMIN_PASSWORD_HASH="${hash}"\n`);
+  console.log(`ADMIN_PASSWORD_HASH="${forEnvFile}"\n`);
+  console.log("  The backslashes are required — dotenv would otherwise eat the $ (CONTEXT §3).\n");
 }
 
 main().catch((error: unknown) => {

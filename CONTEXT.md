@@ -46,7 +46,7 @@ Read these before writing anything.
 3. **Never buffer a file in memory.** No `await request.arrayBuffer()` on an upload chunk, no `fs.readFile` on an artifact. Streams only, via `stream/promises` `pipeline()`. A single `readFile` on an 8 GB ISO OOMs the service.
 4. **Upload and download routes need `export const runtime = 'nodejs'`.** The Edge runtime has no `fs`. Also set `export const dynamic = 'force-dynamic'` on anything reading the filesystem or session, or Next will try to statically prerender it at build time and fail.
 5. **Never send an absolute host path to the client.** Everything crossing the wire is relative to `STORAGE_ROOT`. The DB stores absolute paths; the API translates. Leaking `/srv/downloads/...` into the browser is an information disclosure and makes the storage root un-relocatable.
-6. **The client IP is behind a proxy.** Requests arrive `browser → NPM → Node`, so `request.ip` is NPM's address (or `127.0.0.1` if co-located) and the real client is in `X-Forwarded-For`. The login rate limiter keys on IP — get this wrong and every failed login on the LAN shares one bucket, so one person fat-fingering their password five times locks out the entire office. Use `clientIp()` in `lib/request.ts`, which takes `xff.split(",")[0].trim()` and validates it as an IP, falling back to the socket address. Never key a limiter on a raw `X-Forwarded-For` string.
+6. **The client IP is behind a proxy.** Requests arrive `browser → NPM → Node`, so `request.ip` is NPM's address (or `127.0.0.1` if co-located) and the real client is in `X-Forwarded-For`. The login rate limiter keys on IP — get this wrong and every failed login on the LAN shares one bucket, so one person fat-fingering their password five times locks out the entire office. Use `clientIp()` in `lib/request.ts`, which takes `xff.split(",")[0].trim()` and validates it as an IP with `node:net`. Next 16 exposes no socket address to a Route Handler (`request.ip` went in 15), so the fallback chain is `X-Real-IP` and then the literal `"unknown"`. Never key a limiter on a raw `X-Forwarded-For` string: validating the shape is what bounds the key space, and `lib/rate-limit.ts` caps the bucket map for the case where an attacker forges well-formed addresses instead.
 7. **Never hand-roll a tool `where` clause.** Two independent flags hide a tool — `published: false` (draft) and `visibility: "admin"` (internal). Every read path calls `toolVisibilityWhere(isAdmin)` from `lib/db.ts`. A stray `where: { published: true }` silently exposes every internal tool, and nothing will fail loudly when it does. Out-of-scope lookups return **404, not 403** — a 403 confirms the tool exists.
 
 ---
@@ -62,7 +62,7 @@ STORAGE_ROOT="/srv/downloads"                # dev: ./storage — MUST exist and
 NEXT_PUBLIC_APP_VERSION="1.0.0"              # shown in the header tag
 
 # --- Auth ---
-ADMIN_PASSWORD_HASH=""                       # scrypt hash; generate: pnpm gen:hash
+ADMIN_PASSWORD_HASH=""                       # scrypt hash; pnpm gen:hash — every $ escaped as \$
 AUTH_SECRET=""                               # >=32 random bytes; openssl rand -base64 48
 SESSION_TTL_HOURS="8"
 COOKIE_SECURE="true"                         # dev-only escape hatch; boot FAILS if false in production
@@ -78,7 +78,16 @@ USE_X_ACCEL="false"                          # leave false: Node streams. Only t
 X_ACCEL_PREFIX="/_protected"                 # must match the proxy's `internal` location
 ```
 
-**Boot-time validation.** `lib/env.ts` parses this with Zod and the process **exits non-zero** if `AUTH_SECRET` is missing/short, `ADMIN_PASSWORD_HASH` is empty, `STORAGE_ROOT` does not exist or is not a readable directory, or `COOKIE_SECURE=false` while `NODE_ENV=production`. Fail loudly at start, never silently at 2am.
+**Boot-time validation.** `lib/env.ts` parses this with Zod and the process **exits non-zero** if `AUTH_SECRET` is missing/short, `ADMIN_PASSWORD_HASH` is empty **or is not a well-formed scrypt hash**, `STORAGE_ROOT` does not exist or is not a readable directory, or `COOKIE_SECURE=false` while `NODE_ENV=production`. Fail loudly at start, never silently at 2am.
+
+**Escape the `$` in `ADMIN_PASSWORD_HASH`.** Next loads `.env*` through `@next/env`, which runs dotenv-expand, and a scrypt hash is mostly `$`:
+
+```bash
+ADMIN_PASSWORD_HASH="scrypt$16384$8$1$UPMRdb..."    # WRONG — arrives as "scrypt6384+dnsdp..."
+ADMIN_PASSWORD_HASH="scrypt\$16384\$8\$1\$UPMRdb..."  # right
+```
+
+Quoting does not help: single and double quotes expand alike. `pnpm gen:hash` prints the escaped line, `lib/env.ts` accepts either form (plain `dotenv`, used by `prisma.config.ts`, does not un-escape) and refuses to boot on the mangled one. Without that check the service starts, the login page renders, and the correct password is rejected forever. systemd's `EnvironmentFile=` does not expand, but the escaped form is correct there too.
 
 ---
 

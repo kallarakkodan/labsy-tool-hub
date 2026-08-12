@@ -85,6 +85,16 @@ export function unauthorized(): Response {
   return apiError("UNAUTHORIZED", "Sign in to the admin panel to do that.", 401);
 }
 
+/**
+ * `429` with `Retry-After` (PRD §11.2), from a `lib/rate-limit.ts` result.
+ *
+ * The header is the contract — the login page counts down against it — so it is
+ * set here rather than left to each caller to remember.
+ */
+export function rateLimited(retryAfter: number, message = "Too many requests. Try again shortly."): Response {
+  return apiError("RATE_LIMITED", message, 429, { "Retry-After": String(retryAfter) });
+}
+
 /** `404` for anything out of scope, including tools hidden by visibility. */
 export function notFound(what = "Not found."): Response {
   return apiError("NOT_FOUND", what, 404);

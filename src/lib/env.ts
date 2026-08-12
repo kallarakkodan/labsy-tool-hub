@@ -34,6 +34,27 @@ const stringWithDefault = (fallback: string) =>
 /** AUTH_SECRET is measured in bytes, not characters — CONTEXT §3 says ">=32 random bytes". */
 const MIN_AUTH_SECRET_BYTES = 32;
 
+/** The shape `hashPassword()` emits: `scrypt$N$r$p$salt$hash`, the last two base64. */
+const SCRYPT_HASH = /^scrypt\$\d+\$\d+\$\d+\$[A-Za-z0-9+/]+={0,2}\$[A-Za-z0-9+/]+={0,2}$/;
+
+/*
+ * Why the hash is shape-checked and not merely non-empty.
+ *
+ * Next loads `.env*` through `@next/env`, which runs **dotenv-expand**. A scrypt
+ * hash is full of `$`, and every one of them is read as a variable reference:
+ *
+ *   ADMIN_PASSWORD_HASH="scrypt$16384$8$1$UPMRdb..."   in the file
+ *   "scrypt6384+dnsdp5kXCQ==..."                        in process.env
+ *
+ * Quoting does not help — single and double quotes expand alike. The `$` must be
+ * escaped as `\$`, which is what `pnpm gen:hash` now prints.
+ *
+ * Without this check the damage is silent and total: the service boots, the
+ * login page renders, and the correct password is rejected forever, with one
+ * line in the journal. That is exactly the 2am failure §3's contract exists to
+ * prevent, so it belongs at the boot gate.
+ */
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).optional().transform((v) => v ?? "development"),
 
@@ -43,7 +64,23 @@ const schema = z.object({
   NEXT_PUBLIC_APP_VERSION: stringWithDefault("0.0.0"),
 
   // --- Auth ---
-  ADMIN_PASSWORD_HASH: z.string().min(1, "empty — generate one with `pnpm gen:hash`"),
+  ADMIN_PASSWORD_HASH: z
+    .string()
+    .min(1, "empty — generate one with `pnpm gen:hash`")
+    /*
+     * Accept the escaped form too, because the two loaders in this repo disagree.
+     * `@next/env` expands and un-escapes, so `\$` arrives as `$`; plain `dotenv`
+     * — used by `prisma.config.ts` and `prisma/seed.ts` — does neither, so the
+     * same line arrives with its backslashes intact. Normalising here is what
+     * stops a hash from working under `next dev` and failing under `tsx`.
+     *
+     * Unambiguous, because base64 and the digits around it contain no backslash.
+     */
+    .transform((value) => value.replaceAll("\\$", "$"))
+    .refine(
+      (value) => SCRYPT_HASH.test(value),
+      'is not a scrypt hash. If it looks like the `$` are missing, dotenv expanded them: escape every `$` as `\\$` in the env file, or re-run `pnpm gen:hash` and paste the line it prints',
+    ),
   AUTH_SECRET: z
     .string()
     .refine(

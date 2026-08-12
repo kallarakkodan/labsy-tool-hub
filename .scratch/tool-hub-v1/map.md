@@ -4,19 +4,20 @@ Spec: [spec.md](./spec.md) · Requirements: [PRD.md](../../PRD.md) · Convention
 
 ## Frontier
 
-**Resolved: 01–16, 18.** 224 tests green, `pnpm test:security` green.
+**Resolved: 01–16, 18–20.** 270 tests green, `pnpm test:security` green.
 
-Auth is real: sessions are `jose` JWE cookies and the admin scoping was verified
-end to end with a sealed cookie — anonymous sees 4 tools, a session sees 6 with
-Draft and Internal badges rendering.
+Login works end to end against a running server: correct password sets the
+cookie, the session survives later requests (4 tools anonymous, 6 signed in),
+logout clears it, six wrong passwords return 429 with `Retry-After: 900`, and a
+second IP is unaffected. Failures land in `AuditLog`.
 
 Next workable:
 
-- **19** — `clientIp()` + rate limiter. Needed by 20 and independent of it.
-- **20** — login/logout routes and the login page, which needs 19.
+- **21** — `src/proxy.ts` route guard, security headers, CSRF `Origin`/`Host`
+  check. Everything it needs now exists.
 - **17** — detail drawer, still an optional P1 stretch nothing depends on.
 
-Numeric order takes 19, then 20 → 21 → 22 opens the admin CRUD.
+Numeric order takes 21, then 22 opens the admin CRUD.
 
 ## Dependency graph
 
@@ -42,7 +43,7 @@ Numeric order takes 19, then 20 → 21 → 22 opens the admin CRUD.
                    └─ 16 ToolGrid + states  ── P1 done
                       └─ 17 detail drawer (stretch)
 
-   [18] + [19] ──▶ 20 login routes + page
+   [18] + [19] ──▶ 20 login routes + page          ── P2 auth done
                    └─ 21 proxy guard + headers + CSRF
                       └─ 22 admin tools API + AuditLog
                          ├─ 23 dashboard table + Stale filter
@@ -95,6 +96,33 @@ Made during the breakdown, resolving the four gaps the source documents left ope
   survived only in §10's directory tree. Replaced by `deploy/npm-advanced.conf`,
   which is the §12.5 snippet labelled as paste-into-NPM and read by no process.
   Affects issue 34. PRD §10 corrected.
+
+Made while building:
+
+- **[19](./issues/19-client-ip-and-rate-limit.md) — the limiter splits check from
+  record.** PRD §8.1 counts failed passwords, so login peeks first and records
+  only once the password is known wrong; browse and upload-init use the combined
+  `consumeRateLimit`. Rejected calls are never recorded, and memory is bounded by
+  an on-access sweep plus a 10 000-bucket cap whose eviction takes the *stalest*
+  bucket — so a flooder can never evict itself into a clean slate.
+- **[19] — `clientIp()` has no socket fallback,** because Next 16 exposes no
+  socket address to a Route Handler. The chain is first `X-Forwarded-For` entry →
+  `X-Real-IP` → the literal `"unknown"`. Corrects the issue text, and CONTEXT §2
+  item 6's "falling back to the socket address".
+- **[20](./issues/20-login-routes-and-page.md) — one message, two headers.** Both
+  rejections say the same generic thing; `X-RateLimit-Remaining` and
+  `Retry-After` carry the detail, which is how "show the state clearly" and "keep
+  messages generic" both hold. The 401 that spends the last attempt sends
+  `Retry-After` too.
+- **[20] — `ADMIN_PASSWORD_HASH` must have its `$` escaped as `\$`.** Next loads
+  the environment through `@next/env`, which runs dotenv-expand over `process.env`
+  itself and silently deletes every `$16384`-looking fragment — in `.env.local`
+  and in systemd's `EnvironmentFile=` alike. Found by smoke-testing issue 20: the
+  service started, the page rendered, and the correct password was rejected
+  forever. `lib/env.ts` now shape-checks the hash at the boot gate and accepts
+  either form (plain `dotenv`, used by `prisma.config.ts`, does not un-escape);
+  `gen:hash` prints the escaped line. Documented in CONTEXT §3, flagged in issue
+  35 for the production runbook.
 - **`⌘K` focuses the search input in v1.** The hint stays and does something real;
   it upgrades to the command palette in P6 (PRD §13 row 13) with no change to the
   affordance. Affects issue 13.

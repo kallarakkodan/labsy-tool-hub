@@ -16,8 +16,12 @@ beforeAll(async () => {
   process.env.DATABASE_URL = "file:./test.db";
   process.env.AUTH_SECRET = "a".repeat(48);
   process.env.SESSION_TTL_HOURS = "8";
-  // A real hash of CORRECT, generated the same way `pnpm gen:hash` does.
-  process.env.ADMIN_PASSWORD_HASH = "placeholder";
+  /*
+   * A well-formed dummy first, because `getEnv()` now shape-checks the hash and
+   * `hashPassword` cannot run until the environment parses. The real hash of
+   * CORRECT replaces it on the next line.
+   */
+  process.env.ADMIN_PASSWORD_HASH = "scrypt$16384$8$1$c2FsdA==$aGFzaA==";
   resetEnvCache();
 
   process.env.ADMIN_PASSWORD_HASH = await hashPassword(CORRECT);
@@ -75,18 +79,24 @@ describe("verifyPassword", () => {
     }
   });
 
-  it("refuses everything when the stored hash is malformed, rather than throwing", async () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+  /*
+   * A malformed stored hash is now caught at the boot gate — `lib/env.ts` grew a
+   * shape check after dotenv was found eating the `$` (CONTEXT §3), so a service
+   * with an unusable hash never starts.
+   *
+   * `verifyPassword`'s own parse guard stays as defence in depth and is covered
+   * by `parseHash` returning null for each malformed shape in tests/env.test.ts;
+   * what this asserts is that the two agree, and that nothing here throws its way
+   * out as a 500.
+   */
+  it("cannot be reached with a malformed hash, because boot refuses one", async () => {
     process.env.ADMIN_PASSWORD_HASH = "not-a-hash";
     resetEnvCache();
     try {
-      await expect(verifyPassword(CORRECT)).resolves.toBe(false);
-      await expect(verifyPassword("anything")).resolves.toBe(false);
-      expect(spy).toHaveBeenCalled();
+      await expect(verifyPassword(CORRECT)).rejects.toThrow(/ADMIN_PASSWORD_HASH/);
     } finally {
       process.env.ADMIN_PASSWORD_HASH = await hashPassword(CORRECT);
       resetEnvCache();
-      spy.mockRestore();
     }
   });
 });

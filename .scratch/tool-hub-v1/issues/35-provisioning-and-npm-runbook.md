@@ -21,7 +21,8 @@ contract**, not tuning — uploads break without it.
   - `setfacl -R -m g:labsy:rX /srv/downloads`
   - `setfacl -R -d -m g:labsy:rX /srv/downloads`
 - `/etc/labsy-hub/env` populated (mode 0640, `root:labsy`) with a real
-  `AUTH_SECRET` and a hash from `pnpm gen:hash`.
+  `AUTH_SECRET` and a hash from `pnpm gen:hash`. **Paste the line `gen:hash`
+  prints verbatim, backslashes and all** — see "Watch out" below.
 - `ufw allow from <NPM-IP> to any port 3000 proto tcp` — or skip it entirely and
   bind `127.0.0.1` if NPM is co-located (PRD §12.6).
 - Optional: Samba share with `force group = labsy`, `create mask = 0664`,
@@ -61,3 +62,10 @@ out of scope (D1).
 - If NPM ever fronts this over plain HTTP, `COOKIE_SECURE=false` is required or
   login silently never sticks. That is the only place the app couples to the TLS
   decision.
+- **Every `$` in `ADMIN_PASSWORD_HASH` must be escaped as `\$`,** in
+  `/etc/labsy-hub/env` exactly as in `.env.local`. Next loads the environment
+  through `@next/env`, which runs dotenv-expand over `process.env` itself — so
+  the hash is mangled even when systemd's `EnvironmentFile=` sets it correctly.
+  `pnpm gen:hash` prints the escaped line; paste it as-is. Found while verifying
+  issue 20; the boot gate now refuses the mangled form rather than starting a
+  service whose password can never be accepted (CONTEXT §3).

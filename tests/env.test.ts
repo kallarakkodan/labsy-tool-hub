@@ -92,6 +92,38 @@ describe("parseEnv", () => {
       expect(problems[0]).toContain("gen:hash");
     });
 
+    /*
+     * The mangled form is what `@next/env` produces from an unescaped hash: it
+     * runs dotenv-expand, and `$16384` is read as a variable reference. Before
+     * this check the service booted happily and rejected the correct password
+     * forever, with one line in the journal to show for it.
+     */
+    it("ADMIN_PASSWORD_HASH was eaten by dotenv expansion", () => {
+      const problems = problemsFrom(
+        validEnv({ ADMIN_PASSWORD_HASH: "scrypt6384+dnsdp5kXCQ==+gNdJ121Mz=" }),
+      );
+      expect(problems[0]).toContain("ADMIN_PASSWORD_HASH");
+      expect(problems[0]).toContain("\\$");
+    });
+
+    it("ADMIN_PASSWORD_HASH is some other kind of nonsense", () => {
+      for (const hash of ["hunter2", "bcrypt$2b$10$abc", "scrypt$16384$8$1$c2FsdA==", "$$$$$"]) {
+        expect(problemsFrom(validEnv({ ADMIN_PASSWORD_HASH: hash }))[0]).toContain(
+          "ADMIN_PASSWORD_HASH",
+        );
+      }
+    });
+
+    it("accepts the escaped form, because plain dotenv does not un-escape it", () => {
+      // `prisma.config.ts` and `prisma/seed.ts` load .env.local with bare
+      // `dotenv`, which leaves the backslashes in place. Both loaders must
+      // produce a working hash from the same line.
+      const escaped = "scrypt\\$16384\\$8\\$1\\$c2FsdA==\\$aGFzaA==";
+      expect(parseEnv(validEnv({ ADMIN_PASSWORD_HASH: escaped })).ADMIN_PASSWORD_HASH).toBe(
+        "scrypt$16384$8$1$c2FsdA==$aGFzaA==",
+      );
+    });
+
     it("STORAGE_ROOT does not exist", () => {
       const problems = problemsFrom(validEnv({ STORAGE_ROOT: join(root, "nope") }));
       expect(problems[0]).toContain("STORAGE_ROOT");

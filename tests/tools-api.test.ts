@@ -34,7 +34,7 @@ beforeAll(async () => {
 
   process.env.STORAGE_ROOT = dir;
   process.env.DATABASE_URL = dbUrl;
-  process.env.ADMIN_PASSWORD_HASH = "scrypt$placeholder";
+  process.env.ADMIN_PASSWORD_HASH = "scrypt$16384$8$1$c2FsdA==$aGFzaA==";
   process.env.AUTH_SECRET = "x".repeat(32);
   resetEnvCache();
 

@@ -151,6 +151,20 @@ export const uploadInitSchema = z.object({
   mimeType: z.string().max(255).optional(),
 });
 
+/**
+ * The login body (PRD §8.1). No username — there is one shared password.
+ *
+ * The maximum is not a policy about password strength; it is a cap on how much
+ * work an unauthenticated caller can ask for. scrypt is deliberately expensive,
+ * and hashing a megabyte of submitted "password" once per request is a free CPU
+ * denial of service.
+ */
+export const loginSchema = z.object({
+  password: z.string().min(1, "required").max(1024, "too long"),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
 export type ToolCreateInput = z.infer<typeof toolCreateSchema>;
 export type ToolUpdateInput = z.infer<typeof toolUpdateSchema>;
 export type ToolsQuery = z.infer<typeof toolsQuerySchema>;

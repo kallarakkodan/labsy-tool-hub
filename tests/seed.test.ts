@@ -19,7 +19,7 @@ function runSeeder(args: string[], storageRoot: string, dbUrl: string) {
       ...process.env,
       STORAGE_ROOT: storageRoot,
       DATABASE_URL: dbUrl,
-      ADMIN_PASSWORD_HASH: "scrypt$placeholder",
+      ADMIN_PASSWORD_HASH: "scrypt$16384$8$1$c2FsdA==$aGFzaA==",
       AUTH_SECRET: "x".repeat(32),
     },
   });
