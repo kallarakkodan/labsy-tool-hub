@@ -26,6 +26,7 @@
     "@prisma/adapter-better-sqlite3": "7.9.1",
     "@prisma/client": "^7.9.1",
     "@tanstack/react-table": "^9.1.2",
+    "check-disk-space": "^3.4.0",
     "jose": "^6.2.8",
     "lucide-react": "^1.31.0",
     "next": "16.3.0",

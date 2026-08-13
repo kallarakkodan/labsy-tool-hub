@@ -1,6 +1,6 @@
 # 28 — Upload lifecycle: init, resume query, abort, janitor
 
-Status: ready-for-agent
+Status: resolved
 Phase: P4
 Blocked by: 26
 Spec: PRD §9.5, PRD §13 row 11, CONTEXT §8 step 9
@@ -30,11 +30,11 @@ failed upload from filling the root partition and taking the server down.
 
 ## Done when
 
-- [ ] Test: an upload larger than free disk space is rejected at init (PRD §14)
-- [ ] Test: `fileName` `"../../evil.sh"` becomes `"evil.sh"`
-- [ ] Test: the resume query returns the correct `received` set
-- [ ] Cancel removes all temp chunks (PRD §14)
-- [ ] The janitor reaps an artificially expired upload on next run
+- [x] Test: an upload larger than free disk space is rejected at init (PRD §14)
+- [x] Test: `fileName` `"../../evil.sh"` becomes `"evil.sh"`
+- [x] Test: the resume query returns the correct `received` set
+- [x] Cancel removes all temp chunks (PRD §14)
+- [x] The janitor reaps an artificially expired upload on next run
 
 ## Watch out
 

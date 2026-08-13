@@ -18,4 +18,8 @@ export async function register(): Promise<void> {
   // but it has to win at least once, and boot is the only place that is certain.
   const { ensureWal } = await import("@/lib/db");
   await ensureWal();
+
+  // Reaps expired uploads on boot, then hourly (PRD §9.5, issue 28).
+  const { startUploadJanitor } = await import("@/lib/upload-janitor");
+  startUploadJanitor();
 }
