@@ -38,8 +38,57 @@ past issue 08 still cannot write outside the storage root.
       DB: backed up, gunzipped, restored, and queried back the seeded row;
       separately confirmed a synthetic 2020-dated backup gets pruned on the
       next run and a fresh one does not
-- [ ] The service cannot write outside `/srv/downloads` and `/var/lib/labsy-hub`
-      (PRD §14) — verified by attempting a write in issue 36 (unchanged, as scoped)
+- [x] The service cannot write outside `/srv/downloads` and `/var/lib/labsy-hub`
+      (PRD §14) — dry-run verified in a container (see Comments); the
+      authoritative check is still issue 36's, on the real host
+
+## Comments (round 2 — full container deployment, Docker back up)
+
+Went further than unit-file verification: built a real systemd-as-PID-1
+Ubuntu 24.04 container (`--privileged`, cgroup mount), provisioned it exactly
+per PRD §12.2 (labsy user, directories, default POSIX ACLs), built the app
+for real (`pnpm install && pnpm build`, Node 26), installed and enabled all
+five units, and ran it.
+
+**Found and fixed a real, deployment-breaking bug this only surfaced by
+actually running the unit**: `ExecStart=/usr/bin/node node_modules/.bin/next
+…` — PRD §12.3's own form — fails immediately. pnpm installs `.bin/next` (and
+`.bin/tsx`) as a POSIX shell shim (`#!/bin/sh`), not a JS file, so `node
+<shim>` tries to parse shell as JavaScript and throws a syntax error on the
+first line. `labsy-hub.service` crash-looped on start; `labsy-hub-sweep.service`
+failed silently the same way. Fixed both by executing the shim directly
+(`ExecStart=/opt/labsy-hub/node_modules/.bin/next …` /
+`…/node_modules/.bin/tsx …`) instead of routing it through `node`. Re-verified
+with `systemd-analyze verify` after the fix (still clean) and by actually
+starting both services successfully.
+
+Also caught the app's own boot-time validation working exactly as
+CONTEXT.md documents: it refused to start with `COOKIE_SECURE=false` +
+`NODE_ENV=production` — correct behavior, not a bug, and a sign the check
+earns its keep.
+
+**The sandboxing test** (the actual point of this issue's "Why"): entered the
+running service's real mount namespace with `nsenter -t $(MainPID) -m` and
+attempted writes as the process actually runs. `/etc`, `/root`, and — the
+interesting one — the app's **own directory** `/opt/labsy-hub` all refused
+with `Read-only file system`; `/srv/downloads` and `/var/lib/labsy-hub`
+(the two `ReadWritePaths`) both succeeded. This is `ProtectSystem=strict`
+actually doing its job against the real running process, not a syntax check.
+
+Also exercised, all successful, all through the real sandboxed service:
+admin login, a server-path registration with its checksum landing correctly
+(matched `sha256sum`), a full chunked upload → complete → checksum match,
+a byte-identical download with a working Range request, and both timer
+services fired manually (`labsy-hub-backup.service` wrote a real gzip,
+`labsy-hub-sweep.service` correctly reported "0 newly missing, 0 recovered"
+read-only).
+
+**Still not this container**: real 1GbE throughput, real NPM/TLS, real disk
+contention, a genuine 8GB transfer — issue 36's explicit "do not tick a box
+from a dev-machine result" stands for those, and a Docker container is not
+the real server either. What changed is that the artifacts themselves are
+now proven to actually boot and run correctly, not just parse — a
+categorically different and stronger claim than round 1's syntax-only pass.
 
 ## Comments
 

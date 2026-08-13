@@ -10,11 +10,17 @@ Group=labsy
 WorkingDirectory=/opt/labsy-hub
 EnvironmentFile=/etc/labsy-hub/env
 
+# The executable, not `node <this>`: pnpm installs `.bin/next` as a POSIX
+# shell shim (`#!/bin/sh`), not a JS file — `node node_modules/.bin/next`
+# fails immediately with a syntax error parsing shell as JavaScript. Found by
+# actually running this unit, not by reading it (PRD §12.3's own prose shows
+# the `node …` form, which does not work).
+#
 # Binds loopback only, because Nginx Proxy Manager is co-located on this host
 # (PRD §12.4) and reaches Node over 127.0.0.1. If NPM ever runs on a different
 # host, bind the LAN interface instead — e.g. replace the line below with:
-#   ExecStart=/usr/bin/node node_modules/.bin/next start -p 3000 -H 10.0.0.5
-ExecStart=/usr/bin/node node_modules/.bin/next start -p 3000 -H 127.0.0.1
+#   ExecStart=/opt/labsy-hub/node_modules/.bin/next start -p 3000 -H 10.0.0.5
+ExecStart=/opt/labsy-hub/node_modules/.bin/next start -p 3000 -H 127.0.0.1
 Restart=always
 RestartSec=5
 

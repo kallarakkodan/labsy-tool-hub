@@ -53,3 +53,22 @@ covered by automated tests and need the real deployment:
   a code bug — but it must be discovered here, not by Priya on refresh morning.
 - Do not tick a box from a dev-machine result. The point of this issue is the
   real server.
+
+## Comments
+
+Not a substitute for this issue — recorded here so whoever picks this up
+knows it exists. While verifying issue 34's deploy artifacts, ran a full dry
+deployment in a `--privileged` systemd-as-PID-1 Ubuntu 24.04 container:
+provisioned per PRD §12.2, built and started the real app under
+`labsy-hub.service`, and confirmed (via `nsenter` into the running service's
+actual mount namespace) that `ProtectSystem=strict` genuinely blocks writes
+outside `/srv/downloads` and `/var/lib/labsy-hub` — including to the app's
+own directory. Also exercised login, a server-path registration with
+checksum, a full chunked upload → complete with a matching SHA-256, a
+byte-identical download with Range support, and both timer services firing
+correctly. Full account is in issue 34's Comments (round 2).
+
+None of that ticks a box here — no real 1GbE link, no real NPM/TLS hop, no
+real disk, not the real host. It does mean the deploy artifacts are proven
+to actually boot and run correctly rather than merely parse, which is what
+this issue can now build on rather than discover from zero.

@@ -8,7 +8,9 @@ User=labsy
 Group=labsy
 WorkingDirectory=/opt/labsy-hub
 EnvironmentFile=/etc/labsy-hub/env
-ExecStart=/usr/bin/node node_modules/.bin/tsx scripts/sweep-file-missing.ts
+# The executable, not `node <this>` — see labsy-hub.service's comment on the
+# same pnpm shell-shim issue, found the same way (actually running this unit).
+ExecStart=/opt/labsy-hub/node_modules/.bin/tsx scripts/sweep-file-missing.ts
 
 # Read-only against STORAGE_ROOT by construction (issue 33: "this job reads
 # only") — it only ever needs to write the database.
