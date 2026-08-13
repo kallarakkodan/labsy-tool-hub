@@ -1,13 +1,12 @@
-import type { Tool } from "@/generated/prisma/client";
 import { apiError, apiFailure, notFound, validationFailed } from "@/lib/api";
 import {
   SharedFileError,
   SlugTakenError,
   deleteTool,
+  findToolByIdOrSlug,
   toAdminShape,
   updateTool,
 } from "@/lib/admin-tools";
-import { prisma } from "@/lib/db";
 import { clientIp } from "@/lib/request";
 import { toolDeleteQuerySchema, toolReplaceSchema, toolUpdateSchema } from "@/lib/validation";
 
@@ -38,7 +37,7 @@ export async function DELETE(request: Request, context: RouteContext<"/api/admin
   if (!query.success) return validationFailed(query.error.issues);
 
   try {
-    const existing = await find((await context.params).id);
+    const existing = await findToolByIdOrSlug((await context.params).id);
     if (existing === null) return notFound("No tool with that id or slug.");
 
     const outcome = await deleteTool(existing, query.data.deleteFile, clientIp(request));
@@ -63,7 +62,7 @@ async function write(
   if (!parsed.success) return validationFailed(parsed.error.issues);
 
   try {
-    const existing = await find((await context.params).id);
+    const existing = await findToolByIdOrSlug((await context.params).id);
     if (existing === null) return notFound("No tool with that id or slug.");
 
     const tool = await updateTool(existing, parsed.data, clientIp(request));
@@ -74,18 +73,6 @@ async function write(
     }
     return apiFailure(error, `${method} /api/admin/tools/[id]`);
   }
-}
-
-/**
- * By id or slug, like the public route — the dashboard holds ids, but a URL
- * someone typed by hand will carry the slug.
- *
- * No `toolVisibilityWhere` here, and that is correct rather than an oversight:
- * this is the admin surface, where drafts and internal tools are exactly what
- * needs editing. The scoping that matters happened in the proxy.
- */
-async function find(idOrSlug: string): Promise<Tool | null> {
-  return prisma.tool.findFirst({ where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] } });
 }
 
 async function readJson(request: Request): Promise<unknown> {

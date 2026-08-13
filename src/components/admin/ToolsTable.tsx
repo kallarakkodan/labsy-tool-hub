@@ -38,10 +38,8 @@ const features = tableFeatures({
 const helper = createColumnHelper<typeof features, SerializedAdminTool>();
 
 export interface RowActions {
-  /** Issue 24 supplies this; until then the button renders disabled. */
-  onEdit?: (tool: SerializedAdminTool) => void;
-  /** Issue 25 supplies this. */
-  onDelete?: (tool: SerializedAdminTool) => void;
+  onEdit: (tool: SerializedAdminTool) => void;
+  onDelete: (tool: SerializedAdminTool) => void;
   onDuplicate: (tool: SerializedAdminTool) => void;
   /** Id of a row with a duplicate in flight. */
   busyId: string | null;
@@ -149,11 +147,7 @@ const columns = helper.columns([
 
       return (
         <div className="flex items-center justify-end gap-0.5">
-          <IconButton
-            label={`Edit ${tool.name}`}
-            onClick={actions.onEdit === undefined ? undefined : () => actions.onEdit?.(tool)}
-            pending="The edit slide-over arrives with issue 24"
-          >
+          <IconButton label={`Edit ${tool.name}`} onClick={() => actions.onEdit(tool)}>
             <Pencil className="size-3.5" aria-hidden="true" />
           </IconButton>
 
@@ -164,12 +158,7 @@ const columns = helper.columns([
             <Copy className="size-3.5" aria-hidden="true" />
           </IconButton>
 
-          <IconButton
-            label={`Delete ${tool.name}`}
-            danger
-            onClick={actions.onDelete === undefined ? undefined : () => actions.onDelete?.(tool)}
-            pending="The delete dialog arrives with issue 25"
-          >
+          <IconButton label={`Delete ${tool.name}`} danger onClick={() => actions.onDelete(tool)}>
             <Trash2 className="size-3.5" aria-hidden="true" />
           </IconButton>
         </div>
@@ -182,13 +171,12 @@ function IconButton({
   label,
   onClick,
   danger = false,
-  pending,
   children,
 }: {
   label: string;
+  /** Undefined while busy (the Duplicate action) — the row's other actions stay live. */
   onClick?: () => void;
   danger?: boolean;
-  pending?: string;
   children: React.ReactNode;
 }) {
   const disabled = onClick === undefined;
@@ -199,7 +187,7 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      title={disabled && pending !== undefined ? pending : label}
+      title={label}
       className={`rounded-button p-1.5 transition-colors focus-visible:outline-none
                   focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-not-allowed
                   disabled:opacity-35 ${

@@ -13,6 +13,7 @@ import {
 import type { CategoryCount } from "@/lib/tools";
 import type { SerializedAdminTool } from "@/types";
 import { AdminToolbar } from "./AdminToolbar";
+import { DeleteToolDialog } from "./DeleteToolDialog";
 import { ToolFormSlideOver } from "./ToolFormSlideOver";
 import { ToolsTable } from "./ToolsTable";
 
@@ -40,6 +41,7 @@ export function Dashboard({ tools, categories, nowMs }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SerializedAdminTool | null>(null);
 
   const visible = useMemo(
     () => applyAdminFilters(tools, filters, new Date(nowMs)),
@@ -144,6 +146,7 @@ export function Dashboard({ tools, categories, nowMs }: Props) {
           tools={visible}
           meta={{
             onEdit: (tool) => setFormTarget({ mode: "edit", tool }),
+            onDelete: (tool) => setDeleteTarget(tool),
             onDuplicate: duplicate,
             busyId,
             nowMs,
@@ -161,6 +164,17 @@ export function Dashboard({ tools, categories, nowMs }: Props) {
           onClose={() => setFormTarget(null)}
           onSaved={() => {
             setFormTarget(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {deleteTarget !== null && (
+        <DeleteToolDialog
+          tool={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => {
+            setDeleteTarget(null);
             router.refresh();
           }}
         />

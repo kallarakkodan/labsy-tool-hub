@@ -284,6 +284,23 @@ export async function statFile(relative: string): Promise<FileStat> {
  * header). `deleteTool` performs that check before calling in.
  * ========================================================================== */
 export async function deleteStoredFile(absolute: string): Promise<void> {
+  const real = await assertDeletable(absolute);
+
+  try {
+    await fs.unlink(real);
+  } catch (error) {
+    throw fromFsError(error, path.basename(absolute));
+  }
+}
+
+/**
+ * The two refusals above that a *stored* path can fail before `deleteTool`'s
+ * own "shared by another row" check even runs. Split out so the delete-
+ * confirmation dialog can ask "would this be refused?" (`checkDeletable`)
+ * without it drifting from what an actual deletion enforces (`deleteStoredFile`)
+ * — one rule, two callers, per issue 25's "watch out".
+ */
+async function assertDeletable(absolute: string): Promise<string> {
   // Re-resolve through the same choke point every read path uses. Throws
   // PATH_OUTSIDE_ROOT, NOT_FOUND, or EACCES exactly as a download would.
   const real = await resolveStoredPath(absolute);
@@ -298,10 +315,30 @@ export async function deleteStoredFile(absolute: string): Promise<void> {
     throw new PathError("INVALID_PATH", "Refusing to delete something that is not a regular file");
   }
 
+  return real;
+}
+
+export interface DeletabilityCheck {
+  eligible: boolean;
+  /** A one-line, client-safe reason (PRD §8.2) — null when eligible. */
+  reason: string | null;
+}
+
+/**
+ * A non-throwing preview of `assertDeletable`, for the delete dialog's
+ * server-decided radio option (PRD §8.2, issue 25). Every `PathError` this can
+ * throw is already client-safe (`lib/api.ts`'s `apiFailure` says why), so its
+ * message doubles as the reason shown in the UI.
+ */
+export async function checkDeletable(absolute: string): Promise<DeletabilityCheck> {
   try {
-    await fs.unlink(real);
+    await assertDeletable(absolute);
+    return { eligible: true, reason: null };
   } catch (error) {
-    throw fromFsError(error, path.basename(absolute));
+    if (error instanceof PathError) {
+      return { eligible: false, reason: error.message };
+    }
+    throw error;
   }
 }
 

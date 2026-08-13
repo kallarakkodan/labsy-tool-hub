@@ -75,3 +75,9 @@ export interface ApiErrorBody {
     message: string;
   };
 }
+
+/** `GET /api/admin/tools/[id]/delete-eligibility` (PRD §8.2, issue 25). */
+export interface DeleteEligibility {
+  eligible: boolean;
+  reason: string | null;
+}

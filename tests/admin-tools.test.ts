@@ -126,6 +126,14 @@ async function remove(id: string, query = "") {
   return { response, body: await response.json() };
 }
 
+async function eligibility(id: string) {
+  const { GET } = await import("../src/app/api/admin/tools/[id]/delete-eligibility/route");
+  const response = await GET(new Request("http://hub.test/api/admin/tools/x/delete-eligibility"), {
+    params: Promise.resolve({ id }),
+  });
+  return { response, body: await response.json() };
+}
+
 const serverPath = (relativePath: string) => ({ source: "serverPath", relativePath });
 
 async function auditRows() {
@@ -439,6 +447,73 @@ describe("DELETE", () => {
 
   it("404s for an unknown id", async () => {
     expect((await remove("nope")).response.status).toBe(404);
+  });
+});
+
+// --- delete eligibility (issue 25) --------------------------------------------
+
+describe("GET /api/admin/tools/[id]/delete-eligibility", () => {
+  it("is eligible for a plain, unshared file", async () => {
+    const { body: created } = await post({ ...body, file: serverPath("images/ubuntu.iso") });
+
+    const { response, body: result } = await eligibility(created.id);
+
+    expect(response.status).toBe(200);
+    expect(result).toEqual({ eligible: true, reason: null });
+  });
+
+  it("agrees with DELETE: neither of two tools sharing a path offers file deletion", async () => {
+    const first = await post({ ...body, file: serverPath("images/ubuntu.iso") });
+    const second = await post({ ...body, file: serverPath("images/ubuntu.iso") });
+
+    expect((await eligibility(first.body.id)).body.eligible).toBe(false);
+    expect((await eligibility(second.body.id)).body.eligible).toBe(false);
+    expect((await eligibility(first.body.id)).body.reason).toMatch(/also registered by 1 other tool/i);
+
+    // Same refusal DELETE?deleteFile=true would give, from the same check.
+    const { response: deleteResponse } = await remove(first.body.id, "?deleteFile=true");
+    expect(deleteResponse.status).toBe(409);
+  });
+
+  it("agrees with DELETE: refuses a stored path that is a symlink", async () => {
+    const { body: created } = await post({ ...body, file: serverPath("images/windows.iso") });
+
+    const { prisma } = await import("../src/lib/db");
+    await prisma.tool.update({
+      where: { id: created.id },
+      data: { filePath: join(realRoot, "linked.iso") },
+    });
+
+    const { body: result } = await eligibility(created.id);
+
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toMatch(/symlink/i);
+  });
+
+  it("is ineligible when the file is missing from disk", async () => {
+    writeFileSync(join(root, "vanishing.bin"), "bytes");
+    const { body: created } = await post({ ...body, file: serverPath("vanishing.bin") });
+    rmSync(join(root, "vanishing.bin"));
+
+    const { body: result } = await eligibility(created.id);
+    expect(result.eligible).toBe(false);
+  });
+
+  it("does not unlink the file — it only previews the decision", async () => {
+    const { body: created } = await post({ ...body, file: serverPath("images/ubuntu.iso") });
+
+    await eligibility(created.id);
+
+    expect(existsSync(join(root, "images", "ubuntu.iso"))).toBe(true);
+  });
+
+  it("404s for an unknown id", async () => {
+    expect((await eligibility("nope")).response.status).toBe(404);
+  });
+
+  it("finds a tool by slug as well as by id", async () => {
+    await post({ ...body, slug: "findable", file: serverPath("images/ubuntu.iso") });
+    expect((await eligibility("findable")).body.eligible).toBe(true);
   });
 });
 

@@ -6,6 +6,7 @@ import { mimeTypeFor } from "@/lib/mime";
 import { serializeAdminTool } from "@/lib/serialize";
 import {
   PathError,
+  checkDeletable,
   deleteStoredFile,
   resolveWithinRoot,
   statFile,
@@ -20,7 +21,7 @@ import type {
   ToolUpdateInput,
   ToolsQuery,
 } from "@/lib/validation";
-import type { SerializedAdminTool } from "@/types";
+import type { DeleteEligibility, SerializedAdminTool } from "@/types";
 
 /*
  * The write path (PRD §9.2, issue 22).
@@ -62,6 +63,18 @@ export async function listAdminTools(query: ToolsQuery): Promise<AdminToolListRe
 /** `Tool` → wire shape, with the path relativised (CONTEXT §2 item 5). */
 export async function toAdminShape(tool: Tool): Promise<SerializedAdminTool> {
   return serializeAdminTool(tool, await toRelative(tool.filePath));
+}
+
+/**
+ * By id or slug, like the public route — the dashboard holds ids, but a URL
+ * someone typed by hand will carry the slug.
+ *
+ * No `toolVisibilityWhere` here, and that is correct rather than an oversight:
+ * this is the admin surface, where drafts and internal tools are exactly what
+ * needs editing. The scoping that matters happened in the proxy.
+ */
+export async function findToolByIdOrSlug(idOrSlug: string): Promise<Tool | null> {
+  return prisma.tool.findFirst({ where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] } });
 }
 
 // --- file sources ------------------------------------------------------------
@@ -283,16 +296,9 @@ export async function deleteTool(
   let fileDeleted = false;
 
   if (deleteFile) {
-    /*
-     * The third refusal from PRD §8.2, and the one `lib/storage.ts` cannot make
-     * because it does not consult the database: two catalogue entries may point
-     * at the same artifact — a duplicate created with the Copy action, or the
-     * same ISO registered under two names — and deleting one of them must not
-     * quietly break the other.
-     */
-    const alsoReferenced = await prisma.tool.count({
-      where: { filePath: tool.filePath, id: { not: tool.id } },
-    });
+    // The third refusal from PRD §8.2, and the one `lib/storage.ts` cannot make
+    // because it does not consult the database (see `countSharedReferences`).
+    const alsoReferenced = await countSharedReferences(tool);
     if (alsoReferenced > 0) {
       throw new SharedFileError(alsoReferenced);
     }
@@ -325,4 +331,35 @@ export class SharedFileError extends Error {
     );
     this.name = "SharedFileError";
   }
+}
+
+/**
+ * The database half of the "file deletion" refusals — two catalogue entries
+ * may point at the same artifact (a duplicate created with the Copy action, or
+ * the same ISO registered under two names), and deleting one of them must not
+ * quietly break the other. `lib/storage.ts` cannot make this check itself: it
+ * does not consult the database (CONTEXT §2 item 2).
+ */
+async function countSharedReferences(tool: Tool): Promise<number> {
+  return prisma.tool.count({ where: { filePath: tool.filePath, id: { not: tool.id } } });
+}
+
+/**
+ * Whether the delete dialog may offer "remove and permanently delete the file"
+ * for this tool — the DB check (`countSharedReferences`) plus the filesystem
+ * checks (`checkDeletable`) that `deleteTool` itself enforces at commit time.
+ *
+ * This is a preview, not a second implementation of the rule (issue 25's
+ * "watch out": a client-side re-check would be trivially bypassed by calling
+ * the API directly, and a *server-side* re-implementation could just as easily
+ * drift). Both this function and `deleteTool` route through the same
+ * `countSharedReferences` and `checkDeletable`.
+ */
+export async function checkFileDeleteEligibility(tool: Tool): Promise<DeleteEligibility> {
+  const alsoReferenced = await countSharedReferences(tool);
+  if (alsoReferenced > 0) {
+    return { eligible: false, reason: new SharedFileError(alsoReferenced).message };
+  }
+
+  return checkDeletable(tool.filePath);
 }

@@ -1,6 +1,6 @@
 # 25 — Delete confirmation dialog with the file-deletion choice
 
-Status: ready-for-agent
+Status: resolved
 Phase: P2
 Blocked by: 22, 23
 Spec: PRD §8.2, PRD §16 D4, PRD §14 (Admin)
@@ -25,11 +25,11 @@ nothing. The UI must make the safe choice the easy one.
 
 ## Done when
 
-- [ ] Delete defaults to catalogue-only removal (PRD §14)
-- [ ] File deletion requires typing the exact tool name
-- [ ] Two tools pointing at the same path: neither offers file deletion
-- [ ] A symlinked path never offers file deletion
-- [ ] Both outcomes write the correct `AuditLog` detail
+- [x] Delete defaults to catalogue-only removal (PRD §14)
+- [x] File deletion requires typing the exact tool name
+- [x] Two tools pointing at the same path: neither offers file deletion
+- [x] A symlinked path never offers file deletion
+- [x] Both outcomes write the correct `AuditLog` detail
 
 ## Watch out
 
