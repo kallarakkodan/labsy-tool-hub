@@ -1,13 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { resetEnvCache } from "../src/lib/env";
 import {
   PathError,
+  createUploadDir,
   getRoot,
   listDirectory,
+  removeUploadDir,
   resolveForWrite,
   resolveStoredPath,
   resolveWithinRoot,
@@ -333,5 +335,43 @@ describe("resolveStoredPath", () => {
 
   it("rejects a null byte", async () => {
     await expectPathError(resolveStoredPath(join(root, "a\u0000.iso")), "INVALID_PATH");
+  });
+});
+
+describe("createUploadDir / removeUploadDir (issue 28)", () => {
+  it("creates .uploads/<id> and removeUploadDir deletes exactly that directory", async () => {
+    const dir = await createUploadDir("upload-abc");
+    expect(existsSync(dir)).toBe(true);
+    expect(dir).toBe(join(await getRoot(), ".uploads", "upload-abc"));
+
+    await removeUploadDir(dir);
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  it("tolerates removing an already-gone directory", async () => {
+    const dir = join(await getRoot(), ".uploads", "never-existed");
+    await expect(removeUploadDir(dir)).resolves.toBeUndefined();
+  });
+
+  /*
+   * The regression this guards: a bare `startsWith(uploadsRoot)` string check
+   * accepts `<root>/.uploads/x/../../../etc/passwd` — it literally starts with
+   * the prefix — while resolving to well outside `.uploads`. A corrupted or
+   * hand-edited `Upload.tempDir` must not be able to smuggle a janitor sweep or
+   * a cancel into deleting an arbitrary directory this way.
+   */
+  it("refuses a tempDir value that resolves outside .uploads via a smuggled ..", async () => {
+    const smuggled = join(await getRoot(), ".uploads", "x", "..", "..", "..", "isos");
+    expect(existsSync(join(await getRoot(), "isos"))).toBe(true);
+
+    await expectPathError(removeUploadDir(smuggled), "PATH_OUTSIDE_ROOT");
+    expect(existsSync(join(await getRoot(), "isos"))).toBe(true);
+  });
+
+  it("refuses prefix confusion — a sibling directory sharing .uploads' name as a prefix", async () => {
+    await expectPathError(
+      removeUploadDir(join(await getRoot(), ".uploads-evil")),
+      "PATH_OUTSIDE_ROOT",
+    );
   });
 });

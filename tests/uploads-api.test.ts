@@ -173,6 +173,22 @@ describe("DELETE /api/uploads/[id]", () => {
   it("404s for an unknown id", async () => {
     expect((await cancel("nope")).status).toBe(404);
   });
+
+  it("refuses to cancel when tempDir has been corrupted into a traversal", async () => {
+    const { body: created } = await init(body);
+    const { prisma } = await import("../src/lib/db");
+
+    // Not reachable through the normal init path — this is the "hand-edited or
+    // corrupted row" `removeUploadDir` itself guards against.
+    const smuggled = join(root, ".uploads", "x", "..", "..", "seed");
+    await prisma.upload.update({ where: { id: created.uploadId }, data: { tempDir: smuggled } });
+
+    const response = await cancel(created.uploadId);
+
+    expect(response.status).toBe(403);
+    // The row survives too: a failed cleanup should not quietly forget the upload existed.
+    expect(await prisma.upload.count()).toBe(1);
+  });
 });
 
 // --- janitor -------------------------------------------------------------------

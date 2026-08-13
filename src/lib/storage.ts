@@ -149,16 +149,21 @@ export async function createUploadDir(uploadId: string): Promise<string> {
  * corrupted row must not turn a cleanup job into `rm -rf` on an arbitrary path
  * (CONTEXT §2 item 2 again — the boundary does not get to trust its own
  * output just because it usually wrote it).
+ *
+ * `path.resolve` first, not a bare string comparison — `assertContained` (the
+ * same containment check every other path in this module uses) only defeats a
+ * smuggled `..` if the segments have already been collapsed. A literal
+ * `<root>/.uploads/x/../../../etc` string *starts with* `<root>/.uploads/`
+ * while resolving to well outside it; comparing the raw string would have let
+ * a corrupted `tempDir` walk out of the upload root entirely.
  */
 export async function removeUploadDir(absolute: string): Promise<void> {
   const root = await getRoot();
-  const uploadsRoot = path.join(root, INTERNAL_UPLOAD_DIR) + path.sep;
+  const uploadsRoot = path.join(root, INTERNAL_UPLOAD_DIR);
+  const resolved = path.resolve(absolute);
 
-  if (absolute !== uploadsRoot.slice(0, -1) && !absolute.startsWith(uploadsRoot)) {
-    throw new PathError("PATH_OUTSIDE_ROOT", "Refusing to remove a directory outside the upload temp root");
-  }
-
-  await fs.rm(absolute, { recursive: true, force: true });
+  assertContained(resolved, uploadsRoot);
+  await fs.rm(resolved, { recursive: true, force: true });
 }
 
 /**
