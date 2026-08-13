@@ -67,9 +67,11 @@ curl -s http://127.0.0.1:3000/api/health
 systemctl status labsy-hub.service
 ```
 
-`labsy-hub.service` binds `127.0.0.1:3000` only (edit `deploy/labsy-hub.service`'s
-`ExecStart` to bind the LAN interface instead if your reverse proxy runs on a
-different host — see that file's own comment).
+`labsy-hub.service` binds `0.0.0.0:3000` — reachable from any interface,
+which is what you want when NPM runs on a different host (the common case).
+If NPM is genuinely co-located on this same host and you'd rather close off
+every other interface, edit `deploy/labsy-hub.service`'s `ExecStart` to bind
+`127.0.0.1` instead — see that file's own comment.
 
 ## Configuration
 
