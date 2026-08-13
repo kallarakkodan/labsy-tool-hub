@@ -1,7 +1,6 @@
 import type { Prisma, Tool } from "@/generated/prisma/client";
 import { recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
-import { getEnv } from "@/lib/env";
 import { mimeTypeFor } from "@/lib/mime";
 import { serializeAdminTool } from "@/lib/serialize";
 import {
@@ -120,13 +119,10 @@ export async function resolveFileSource(file: FileSource): Promise<ResolvedSourc
 /**
  * Where a completed upload's bytes ended up.
  *
- * Derived from the convention issue 30 states — `<UPLOAD_SUBDIR>/<fileName>` —
- * rather than read from the row, because `Upload` has no column for the final
- * path. That is a real seam: issue 30 also allows an optional `targetSubdir`,
- * and this derivation cannot see one, so such an upload resolves to nothing and
- * 404s with a path the admin can recognise. **Issue 30 should persist the final
- * relative path on the `Upload` row and this function should read it** — noted
- * on that ticket rather than guessed at here.
+ * Reads `Upload.finalPath`, set by `POST .../complete` (issue 30) — not
+ * derived from `fileName`, because an upload may have gone into an optional
+ * `targetSubdir` or picked up a `" (2)"` collision suffix, neither of which a
+ * `${UPLOAD_SUBDIR}/${fileName}` guess could see.
  */
 async function uploadPath(uploadId: string): Promise<string> {
   const upload = await prisma.upload.findUnique({ where: { id: uploadId } });
@@ -134,11 +130,11 @@ async function uploadPath(uploadId: string): Promise<string> {
   if (upload === null) {
     throw new PathError("NOT_FOUND", "That upload does not exist");
   }
-  if (upload.status !== "completed") {
+  if (upload.status !== "completed" || upload.finalPath === null) {
     throw new PathError("NOT_FOUND", "That upload has not finished");
   }
 
-  return `${getEnv().UPLOAD_SUBDIR}/${upload.fileName}`;
+  return upload.finalPath;
 }
 
 // --- slugs -------------------------------------------------------------------

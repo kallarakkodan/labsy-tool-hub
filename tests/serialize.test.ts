@@ -97,6 +97,7 @@ describe("serializeUpload", () => {
     received: "[0,1,2]",
     tempDir: "/srv/downloads/.uploads/clx1111111111111111111111",
     status: "pending",
+    finalPath: null,
     createdAt: new Date("2026-08-12T10:00:00.000Z"),
     expiresAt: new Date("2026-08-13T10:00:00.000Z"),
     ...overrides,

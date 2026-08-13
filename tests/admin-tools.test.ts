@@ -577,6 +577,7 @@ describe("file source: upload", () => {
         totalChunks: 4,
         tempDir: join(root, ".uploads", "x"),
         status: "completed",
+        finalPath: "uploads/assembled.iso",
         expiresAt: new Date(Date.now() + 3_600_000),
       },
     });

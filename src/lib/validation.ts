@@ -163,6 +163,20 @@ export const uploadInitSchema = z.object({
 });
 
 /**
+ * `POST /api/uploads/[id]/complete` (PRD §9.5, issue 30). `targetSubdir` is
+ * only shape-validated here — a string, not too long. The safety check
+ * (neutralising `..`, containment) is `lib/storage.ts`'s `resolveUploadDestination`,
+ * the same division of labour as every other path in this codebase: Zod
+ * validates shape, `lib/storage.ts` validates safety.
+ */
+export const uploadCompleteSchema = z.object({
+  targetSubdir: z.string().max(500).optional(),
+  overwrite: z.boolean().optional(),
+});
+
+export type UploadCompleteInput = z.infer<typeof uploadCompleteSchema>;
+
+/**
  * The login body (PRD §8.1). No username — there is one shared password.
  *
  * The maximum is not a policy about password strength; it is a cap on how much

@@ -56,6 +56,11 @@ model Upload {
   received    String   @default("[]") // JSON array of completed chunk indices
   tempDir     String
   status      String   @default("pending") // pending | completed | aborted
+  // Set by POST .../complete (issue 30): <UPLOAD_SUBDIR>/<targetSubdir?>/<name>,
+  // relative to STORAGE_ROOT. `resolveFileSource`'s `source: "upload"` reads
+  // this rather than re-deriving it, because a derivation from fileName alone
+  // cannot see the optional targetSubdir or a " (2)" collision suffix.
+  finalPath   String?
   createdAt   DateTime @default(now())
   expiresAt   DateTime // now + UPLOAD_TTL_HOURS; janitor reaps
 }

@@ -1,6 +1,6 @@
 # 30 — POST /api/uploads/[id]/complete: concatenate and hash in one pass
 
-Status: ready-for-agent
+Status: resolved
 Phase: P4
 Blocked by: 29
 Spec: PRD §9.5, CONTEXT §7.3, CONTEXT §9 (upload protocol tests)
@@ -34,11 +34,13 @@ server.
 
 ## Done when
 
-- [ ] Test: missing chunk → 409; size mismatch → 409 with temp dir intact
-- [ ] Test: short final chunk assembles correctly
-- [ ] Test: the assembled file's SHA-256 equals the value returned
-- [ ] Test: a name collision produces ` (2)`, and `overwrite: true` replaces
-- [ ] The completed file's `sha256sum` on disk matches the UI (PRD §14)
+- [x] Test: missing chunk → 409; size mismatch → 409 with temp dir intact
+- [x] Test: short final chunk assembles correctly
+- [x] Test: the assembled file's SHA-256 equals the value returned
+- [x] Test: a name collision produces ` (2)`, and `overwrite: true` replaces
+- [x] The completed file's `sha256sum` on disk matches the UI (PRD §14) —
+      verified against the real dev server with `shasum -a 256` and `cmp`,
+      not just in-process
 
 ## Watch out
 

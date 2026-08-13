@@ -1,6 +1,8 @@
 import path from "node:path";
-import { createWriteStream } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
+import { once } from "node:events";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
@@ -205,6 +207,176 @@ export async function writeUploadChunk(
   const stat = await fs.stat(tmpPath);
   await fs.rename(tmpPath, finalPath);
   return stat.size;
+}
+
+// --- upload completion (PRD §9.5, issue 30) -----------------------------------
+
+export class MissingChunkError extends Error {
+  constructor(readonly index: number) {
+    super(`Chunk ${index} was never received.`);
+    this.name = "MissingChunkError";
+  }
+}
+
+export class ChunkSizeMismatchError extends Error {
+  constructor(readonly index: number, readonly expected: number, readonly actual: number) {
+    super(`Chunk ${index} is ${actual} bytes on disk, expected ${expected}.`);
+    this.name = "ChunkSizeMismatchError";
+  }
+}
+
+export class SizeMismatchError extends Error {
+  constructor(readonly expected: number, readonly actual: number) {
+    super(`Assembled ${actual} bytes, expected ${expected}.`);
+    this.name = "SizeMismatchError";
+  }
+}
+
+/**
+ * The cheap pre-flight before the expensive concatenation pass: every part
+ * file exists and is exactly the size its index implies (the last part may be
+ * short). `stat`-only — never reads a byte of content, so a client that
+ * dropped chunk 4 of 500 fails in milliseconds, not after re-reading the
+ * 499 chunks it did send.
+ */
+export async function verifyUploadParts(
+  tempDir: string,
+  totalChunks: number,
+  chunkSize: number,
+  totalSize: bigint,
+): Promise<void> {
+  for (let index = 0; index < totalChunks; index++) {
+    const expected =
+      index === totalChunks - 1
+        ? Number(totalSize - BigInt(chunkSize) * BigInt(totalChunks - 1))
+        : chunkSize;
+
+    let stat;
+    try {
+      stat = await fs.stat(path.join(tempDir, `${index}.part`));
+    } catch {
+      throw new MissingChunkError(index);
+    }
+    if (stat.size !== expected) {
+      throw new ChunkSizeMismatchError(index, expected, stat.size);
+    }
+  }
+}
+
+/**
+ * Ensure `STORAGE_ROOT/<UPLOAD_SUBDIR>/<targetSubdir?>` exists and pick the
+ * absolute destination for `fileName` inside it — suffixing `" (2)"`, `" (3)"`,
+ * … on a name collision unless `overwrite` is set (PRD §9.5). Nothing is
+ * written to `fileName` itself here; this only decides where it will go.
+ *
+ * `targetSubdir` is client-supplied (issue 30's "watch out"). The directory
+ * does not exist yet, so `resolveWithinRoot` cannot validate it — `mkdir`
+ * would need to run first, and running it on a raw join would let `../../etc`
+ * walk out of the root before there is anything to check `realpath` against.
+ * `joinWithinRoot` (the same `..`-neutralising choke point every other write
+ * path in this module goes through) anchors it first; `realpath` plus
+ * `assertContained` re-confirms containment on what `mkdir` actually created,
+ * the same defence-in-depth `resolveForWrite` applies to a file's parent.
+ */
+export async function resolveUploadDestination(
+  fileName: string,
+  targetSubdir: string | undefined,
+  overwrite: boolean,
+): Promise<{ absolutePath: string; fileName: string }> {
+  const root = await getRoot();
+  const subdirRelative = path.posix.join(getEnv().UPLOAD_SUBDIR, targetSubdir ?? "");
+  const dirTarget = joinWithinRoot(root, subdirRelative);
+
+  await fs.mkdir(dirTarget, { recursive: true });
+  const realDir = await fs.realpath(dirTarget);
+  assertContained(realDir, root);
+
+  return uniqueDestination(realDir, fileName, overwrite);
+}
+
+async function uniqueDestination(
+  dir: string,
+  fileName: string,
+  overwrite: boolean,
+): Promise<{ absolutePath: string; fileName: string }> {
+  if (overwrite || !(await pathExists(path.join(dir, fileName)))) {
+    return { absolutePath: path.join(dir, fileName), fileName };
+  }
+
+  const ext = path.extname(fileName);
+  const base = fileName.slice(0, fileName.length - ext.length);
+
+  // Bounded, like `admin-tools.ts`'s slug suffixing: a name colliding 200
+  // times is a script hammering this endpoint, not a real filename to solve for.
+  for (let n = 2; n < 200; n++) {
+    const candidateName = `${base} (${n})${ext}`;
+    const candidatePath = path.join(dir, candidateName);
+    if (!(await pathExists(candidatePath))) {
+      return { absolutePath: candidatePath, fileName: candidateName };
+    }
+  }
+
+  throw new PathError("INVALID_PATH", "Too many filename collisions in this folder");
+}
+
+async function pathExists(absolute: string): Promise<boolean> {
+  try {
+    await fs.access(absolute);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Concatenate `<tempDir>/0.part .. <totalChunks-1>.part`, in index order, into
+ * `destAbsolute` — one read of the data, hashing as it goes (CONTEXT §7.3), not
+ * a second pass once the file is assembled.
+ *
+ * Writes to `<destAbsolute>.tmp`. Renamed into place only if the byte count
+ * written matches `expectedSize`; on a mismatch the `.tmp` file is removed and
+ * `SizeMismatchError` is thrown, but `tempDir` — the original chunk parts — is
+ * left untouched, so an admin can inspect what actually arrived (PRD §9.5).
+ * The caller decides when it is safe to `removeUploadDir(tempDir)`: only after
+ * this resolves.
+ */
+export async function concatenateUpload(
+  tempDir: string,
+  totalChunks: number,
+  destAbsolute: string,
+  expectedSize: bigint,
+): Promise<{ size: bigint; checksum: string }> {
+  const tmpPath = `${destAbsolute}.tmp`;
+  const hash = createHash("sha256");
+  let size = 0;
+
+  const dest = createWriteStream(tmpPath);
+  try {
+    for (let index = 0; index < totalChunks; index++) {
+      const part = createReadStream(path.join(tempDir, `${index}.part`));
+      for await (const chunk of part as AsyncIterable<Buffer>) {
+        hash.update(chunk);
+        size += chunk.length;
+        if (!dest.write(chunk)) {
+          await once(dest, "drain");
+        }
+      }
+    }
+    dest.end();
+    await once(dest, "finish");
+  } catch (error) {
+    dest.destroy();
+    await fs.rm(tmpPath, { force: true });
+    throw error;
+  }
+
+  if (size !== Number(expectedSize)) {
+    await fs.rm(tmpPath, { force: true });
+    throw new SizeMismatchError(Number(expectedSize), size);
+  }
+
+  await fs.rename(tmpPath, destAbsolute);
+  return { size: BigInt(size), checksum: hash.digest("hex") };
 }
 
 /**
