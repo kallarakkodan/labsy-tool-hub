@@ -64,7 +64,13 @@ export function ToolCardMenu({ tool }: Props) {
     try {
       await navigator.clipboard.writeText(item.value);
       setCopied(item.label);
-      setTimeout(() => setCopied(null), 1500);
+      // Brief pause so the checkmark actually registers before the menu closes
+      // itself — instant close reads as "did that even work?", no pause at all
+      // means it never closes on its own.
+      setTimeout(() => {
+        setOpen(false);
+        setCopied(null);
+      }, 500);
     } catch {
       setCopied(null);
     }

@@ -55,7 +55,10 @@ export function ToolCard({ tool }: Props) {
         </div>
 
         <h2 className="mt-4 text-[15px] font-semibold tracking-[-0.02em] text-fg">{tool.name}</h2>
-        <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{tool.description}</p>
+        {/* min-h-10 reserves the full 2-line clamp height regardless of actual
+            description length, so the separator below sits at the same spot on
+            every card instead of drifting up for one-line descriptions. */}
+        <p className="mt-1 line-clamp-2 min-h-10 text-sm text-fg-muted">{tool.description}</p>
 
         <div className="mt-4 border-t border-border pt-3">
           <div className="flex items-center justify-between gap-2 font-mono text-xs tabular-nums text-fg-muted">
@@ -95,7 +98,7 @@ function UnavailableCard({ tool }: { tool: SerializedTool }) {
       </div>
 
       <h2 className="mt-4 text-[15px] font-semibold tracking-[-0.02em] text-fg">{tool.name}</h2>
-      <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{tool.description}</p>
+      <p className="mt-1 line-clamp-2 min-h-10 text-sm text-fg-muted">{tool.description}</p>
 
       <div className="mt-4 border-t border-border pt-3">
         <p className="font-mono text-xs text-fg-subtle">
