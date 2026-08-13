@@ -1,5 +1,6 @@
 import type { Prisma, Tool } from "@/generated/prisma/client";
 import { recordAudit } from "@/lib/audit";
+import { enqueueChecksum } from "@/lib/checksum";
 import { prisma } from "@/lib/db";
 import { mimeTypeFor } from "@/lib/mime";
 import { serializeAdminTool } from "@/lib/serialize";
@@ -85,6 +86,13 @@ export interface ResolvedSource {
   fileName: string;
   fileSize: bigint;
   mimeType: string;
+  /**
+   * Set only when the source is a completed upload that already computed its
+   * own SHA-256 during concatenation (issue 30). A server-path registration
+   * has never had its bytes read, so this is `null` and the caller enqueues a
+   * background hash (issue 32) instead of leaving `checksum` permanently empty.
+   */
+  checksum: string | null;
 }
 
 /**
@@ -101,7 +109,10 @@ export interface ResolvedSource {
  * client-supplied size would be wrong in the catalogue for no reason.
  */
 export async function resolveFileSource(file: FileSource): Promise<ResolvedSource> {
-  const relative = file.source === "serverPath" ? file.relativePath : await uploadPath(file.uploadId);
+  const { relative, checksum } =
+    file.source === "serverPath"
+      ? { relative: file.relativePath, checksum: null }
+      : await uploadPath(file.uploadId);
 
   const absolutePath = await resolveWithinRoot(relative);
   // `statFile` rejects a directory and anything that is not a regular file.
@@ -113,18 +124,20 @@ export async function resolveFileSource(file: FileSource): Promise<ResolvedSourc
     fileName: stat.name,
     fileSize: stat.size,
     mimeType: mimeTypeFor(stat.name),
+    checksum,
   };
 }
 
 /**
- * Where a completed upload's bytes ended up.
+ * Where a completed upload's bytes ended up, and the checksum it already
+ * computed getting there.
  *
- * Reads `Upload.finalPath`, set by `POST .../complete` (issue 30) — not
- * derived from `fileName`, because an upload may have gone into an optional
- * `targetSubdir` or picked up a `" (2)"` collision suffix, neither of which a
- * `${UPLOAD_SUBDIR}/${fileName}` guess could see.
+ * `finalPath` is read rather than derived from `fileName`, because an upload
+ * may have gone into an optional `targetSubdir` or picked up a `" (2)"`
+ * collision suffix, neither of which a `${UPLOAD_SUBDIR}/${fileName}` guess
+ * could see.
  */
-async function uploadPath(uploadId: string): Promise<string> {
+async function uploadPath(uploadId: string): Promise<{ relative: string; checksum: string | null }> {
   const upload = await prisma.upload.findUnique({ where: { id: uploadId } });
 
   if (upload === null) {
@@ -134,7 +147,7 @@ async function uploadPath(uploadId: string): Promise<string> {
     throw new PathError("NOT_FOUND", "That upload has not finished");
   }
 
-  return upload.finalPath;
+  return { relative: upload.finalPath, checksum: upload.checksum };
 }
 
 // --- slugs -------------------------------------------------------------------
@@ -199,6 +212,8 @@ export async function createTool(input: ToolCreateInput, actorIp: string): Promi
       fileName: source.fileName,
       fileSize: source.fileSize,
       mimeType: source.mimeType,
+      checksum: source.checksum,
+      checksumAt: source.checksum !== null ? new Date() : null,
       iconUrl: input.iconUrl ?? null,
       notes: input.notes ?? null,
       published: input.published ?? true,
@@ -206,6 +221,11 @@ export async function createTool(input: ToolCreateInput, actorIp: string): Promi
       featured: input.featured ?? false,
     },
   });
+
+  // Only the server-path case reaches here with no checksum yet — an upload
+  // already computed its own during concatenation (issue 30), and `source`
+  // carried it straight onto the row above.
+  if (source.checksum === null) enqueueChecksum(tool.id, tool.filePath);
 
   await recordAudit("tool.create", {
     targetId: tool.id,
@@ -248,7 +268,12 @@ export async function updateTool(
    * carrying the old size forward would leave the catalogue quietly lying about
    * a number the admin can see. Doing so also clears `fileMissing`: the sweep
    * (issue 33) set it, and a successful stat is the proof that it is stale.
+   *
+   * The checksum is never carried forward either — a changed file means a
+   * changed checksum, and leaving the old value in place would have the copy
+   * button hand out a hash for bytes that are no longer there.
    */
+  let needsHash = false;
   if (input.file !== undefined) {
     const source = await resolveFileSource(input.file);
     data.filePath = source.absolutePath;
@@ -256,10 +281,15 @@ export async function updateTool(
     data.fileSize = source.fileSize;
     data.mimeType = source.mimeType;
     data.fileMissing = false;
+    data.checksum = source.checksum;
+    data.checksumAt = source.checksum !== null ? new Date() : null;
+    needsHash = source.checksum === null;
     changed.push("file");
   }
 
   const tool = await prisma.tool.update({ where: { id: existing.id }, data });
+
+  if (needsHash) enqueueChecksum(tool.id, tool.filePath);
 
   await recordAudit("tool.update", {
     targetId: tool.id,

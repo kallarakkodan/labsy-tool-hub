@@ -62,7 +62,7 @@ export async function POST(request: Request, context: RouteContext<"/api/uploads
     const relativePath = await toRelative(destination.absolutePath);
     await prisma.upload.update({
       where: { id },
-      data: { status: "completed", finalPath: relativePath },
+      data: { status: "completed", finalPath: relativePath, checksum },
     });
 
     await recordAudit("upload.complete", {

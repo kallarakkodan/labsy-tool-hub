@@ -378,6 +378,19 @@ export async function concatenateUpload(
 }
 
 /**
+ * Streamed SHA-256 over an already-registered tool's file (PRD §11.3,
+ * issue 32). Re-validates the stored path first, like every other absolute
+ * path this module is handed — the DB is not a trusted source of paths
+ * (PRD §9.4 step 2) — rather than trusting that a caller already checked it.
+ */
+export async function hashFile(absolute: string): Promise<string> {
+  const real = await resolveStoredPath(absolute);
+  const hash = createHash("sha256");
+  await pipeline(createReadStream(real), hash);
+  return hash.digest("hex");
+}
+
+/**
  * Re-validate an **absolute** path already stored in the database (PRD §9.4
  * step 2: "the DB is not trusted").
  *

@@ -61,6 +61,10 @@ model Upload {
   // this rather than re-deriving it, because a derivation from fileName alone
   // cannot see the optional targetSubdir or a " (2)" collision suffix.
   finalPath   String?
+  // SHA-256, computed for free during the concatenation pass (issue 30). Read
+  // by `resolveFileSource`'s `source: "upload"` (issue 32) so a tool created
+  // from a completed upload never re-hashes a file this app already hashed.
+  checksum    String?
   createdAt   DateTime @default(now())
   expiresAt   DateTime // now + UPLOAD_TTL_HOURS; janitor reaps
 }

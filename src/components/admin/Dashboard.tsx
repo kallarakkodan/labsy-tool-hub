@@ -150,6 +150,7 @@ export function Dashboard({ tools, categories, nowMs }: Props) {
             onDuplicate: duplicate,
             busyId,
             nowMs,
+            refresh: () => router.refresh(),
           }}
         />
       )}

@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { formatBytes, formatDate, formatRelativeDate } from "@/lib/format";
 import type { SerializedAdminTool } from "@/types";
+import { ChecksumCell } from "./ChecksumCell";
 import { PathCell } from "./PathCell";
 import { StatusChips } from "./StatusChips";
 
@@ -56,6 +57,8 @@ export interface TableMeta extends RowActions {
    * is the right trade on a dashboard.
    */
   nowMs: number;
+  /** Re-fetches the list — the Checksum column's Recompute button uses this to pick up the "Computing…" state. */
+  refresh: () => void;
 }
 
 const columns = helper.columns([
@@ -105,6 +108,17 @@ const columns = helper.columns([
   helper.accessor("filePath", {
     header: "Path",
     cell: ({ getValue }) => <PathCell path={getValue()} />,
+  }),
+
+  helper.accessor("checksum", {
+    header: "Checksum",
+    cell: ({ row, table }) => (
+      <ChecksumCell
+        toolId={row.original.id}
+        checksum={row.original.checksum}
+        onRecomputed={(table.options.meta as TableMeta).refresh}
+      />
+    ),
   }),
 
   helper.display({

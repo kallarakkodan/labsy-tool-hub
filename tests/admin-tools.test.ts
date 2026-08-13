@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -134,11 +135,31 @@ async function eligibility(id: string) {
   return { response, body: await response.json() };
 }
 
+async function recomputeChecksum(id: string) {
+  const { POST } = await import("../src/app/api/admin/tools/[id]/checksum/route");
+  const response = await POST(new Request("http://hub.test/api/admin/tools/x/checksum", { method: "POST" }), {
+    params: Promise.resolve({ id }),
+  });
+  return { response, body: await response.json() };
+}
+
 const serverPath = (relativePath: string) => ({ source: "serverPath", relativePath });
 
 async function auditRows() {
   const { prisma } = await import("../src/lib/db");
   return prisma.auditLog.findMany({ orderBy: { createdAt: "asc" } });
+}
+
+/** Background checksum jobs (issue 32) land after the request that enqueued them returns. */
+async function waitForChecksum(id: string, timeoutMs = 3000): Promise<string> {
+  const { prisma } = await import("../src/lib/db");
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const row = await prisma.tool.findUniqueOrThrow({ where: { id } });
+    if (row.checksum !== null) return row.checksum;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error(`timed out waiting for tool ${id} to be hashed`);
 }
 
 // --- create ------------------------------------------------------------------
@@ -611,5 +632,85 @@ describe("file source: upload", () => {
   it("refuses an upload id that does not exist", async () => {
     const { response } = await post({ ...body, file: { source: "upload", uploadId: "nope" } });
     expect(response.status).toBe(404);
+  });
+});
+
+// --- checksums (issue 32) ------------------------------------------------------
+
+describe("background checksums for server-path registrations", () => {
+  it("saves immediately with checksum null, then fills it in without another request", async () => {
+    const { response, body: created } = await post({ ...body, file: serverPath("images/ubuntu.iso") });
+
+    expect(response.status).toBe(201);
+    expect(created.checksum).toBeNull();
+
+    const checksum = await waitForChecksum(created.id);
+    expect(checksum).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("clears the checksum and re-hashes when the underlying file changes", async () => {
+    const { body: created } = await post({ ...body, file: serverPath("images/ubuntu.iso") });
+    const first = await waitForChecksum(created.id);
+
+    await send("PATCH", created.id, { file: serverPath("images/windows.iso") });
+
+    const { prisma } = await import("../src/lib/db");
+    // Cleared immediately, not left showing ubuntu.iso's hash for a file that is now windows.iso.
+    expect((await prisma.tool.findUniqueOrThrow({ where: { id: created.id } })).checksum).toBeNull();
+
+    const second = await waitForChecksum(created.id);
+    expect(second).not.toBe(first);
+  });
+
+  it("carries an upload's already-computed checksum onto the tool without re-hashing", async () => {
+    mkdirSync(join(root, "uploads"), { recursive: true });
+    const bytes = "z".repeat(4096);
+    writeFileSync(join(root, "uploads", "assembled.iso"), bytes);
+    const expectedHash = createHash("sha256").update(bytes).digest("hex");
+
+    const { prisma } = await import("../src/lib/db");
+    const upload = await prisma.upload.create({
+      data: {
+        fileName: "assembled.iso",
+        totalSize: 4096n,
+        chunkSize: 1024,
+        totalChunks: 4,
+        tempDir: join(root, ".uploads", "x"),
+        status: "completed",
+        finalPath: "uploads/assembled.iso",
+        checksum: expectedHash,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+
+    const { body: created } = await post({ ...body, file: { source: "upload", uploadId: upload.id } });
+
+    // Present immediately — no wait, because nothing was enqueued.
+    expect(created.checksum).toBe(expectedHash);
+  });
+});
+
+describe("POST /api/admin/tools/[id]/checksum", () => {
+  it("recomputes and updates checksumAt", async () => {
+    const { body: created } = await post({ ...body, file: serverPath("images/ubuntu.iso") });
+    await waitForChecksum(created.id);
+
+    const { prisma } = await import("../src/lib/db");
+    const before = await prisma.tool.findUniqueOrThrow({ where: { id: created.id } });
+
+    const { response, body: outcome } = await recomputeChecksum(created.id);
+    expect(response.status).toBe(200);
+    expect(outcome).toEqual({ enqueued: true });
+
+    // Cleared immediately on recompute, per the route's own contract.
+    expect((await prisma.tool.findUniqueOrThrow({ where: { id: created.id } })).checksum).toBeNull();
+
+    await waitForChecksum(created.id);
+    const after = await prisma.tool.findUniqueOrThrow({ where: { id: created.id } });
+    expect(after.checksumAt!.getTime()).toBeGreaterThan(before.checksumAt!.getTime());
+  });
+
+  it("404s for an unknown id", async () => {
+    expect((await recomputeChecksum("nope")).response.status).toBe(404);
   });
 });
