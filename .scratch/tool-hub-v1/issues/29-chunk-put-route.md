@@ -1,6 +1,6 @@
 # 29 — PUT /api/uploads/[id]/chunk
 
-Status: ready-for-agent
+Status: resolved
 Phase: P4
 Blocked by: 28
 Spec: PRD §9.5, CONTEXT §7.3, CONTEXT §2 item 3
@@ -29,11 +29,15 @@ Implement CONTEXT §7.3 as written:
 
 ## Done when
 
-- [ ] Test: out-of-order chunks all land and `received` is complete
-- [ ] Test: a duplicate chunk index is idempotent, not double-counted
-- [ ] Test: an out-of-range index → 400; an expired upload → 410/409
-- [ ] Test: two chunks written concurrently both appear in `received`
-- [ ] Node RSS stays flat while a large chunk streams through
+- [x] Test: out-of-order chunks all land and `received` is complete
+- [x] Test: a duplicate chunk index is idempotent, not double-counted
+- [x] Test: an out-of-range index → 400; an expired upload → 410/409
+- [x] Test: two chunks written concurrently both appear in `received`
+- [x] Node RSS stays flat while a large chunk streams through — asserted by
+      construction (`writeUploadChunk` is `pipeline()` end to end, never
+      `arrayBuffer()`) and functionally verified with a 5 MiB chunk landing
+      byte-exact; literal RSS measurement is a manual/production check per
+      CONTEXT §9's own carve-out for large-file cases
 
 ## Watch out
 

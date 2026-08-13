@@ -1,5 +1,9 @@
 import path from "node:path";
+import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { getEnv } from "@/lib/env";
 
 /*
@@ -164,6 +168,43 @@ export async function removeUploadDir(absolute: string): Promise<void> {
 
   assertContained(resolved, uploadsRoot);
   await fs.rm(resolved, { recursive: true, force: true });
+}
+
+/**
+ * Write one upload chunk into `<tempDir>/<index>.part` (PRD §9.5, CONTEXT §7.3,
+ * issue 29). Streams straight through with `pipeline()` — never buffered, so a
+ * 16 MiB chunk never becomes 16 MiB of resident memory (CONTEXT §2 item 3).
+ *
+ * Writes to `<index>.part.tmp` and renames only after `pipeline()` resolves.
+ * If the client aborts mid-chunk, `pipeline()` rejects, the `.tmp` file is left
+ * behind (or removed, best-effort) and the rename never happens — so a short
+ * write can never be mistaken for a complete `.part` the caller then marks
+ * received.
+ *
+ * `tempDir` and `index` are not re-validated here: `tempDir` is the caller's
+ * `Upload.tempDir` column (itself only ever produced by `createUploadDir`), and
+ * `index` must already be an integer the route handler bounded against
+ * `totalChunks` — a validated integer's string form contains only digits, so it
+ * cannot carry a path separator regardless.
+ */
+export async function writeUploadChunk(
+  tempDir: string,
+  index: number,
+  body: ReadableStream,
+): Promise<number> {
+  const tmpPath = path.join(tempDir, `${index}.part.tmp`);
+  const finalPath = path.join(tempDir, `${index}.part`);
+
+  try {
+    await pipeline(Readable.fromWeb(body as unknown as NodeReadableStream), createWriteStream(tmpPath));
+  } catch (error) {
+    await fs.rm(tmpPath, { force: true });
+    throw error;
+  }
+
+  const stat = await fs.stat(tmpPath);
+  await fs.rename(tmpPath, finalPath);
+  return stat.size;
 }
 
 /**
