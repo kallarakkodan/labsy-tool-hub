@@ -33,6 +33,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.docker.example
 
 # --- Labsy Tool Hub ---
 # Machine-local Claude Code permissions. Shared settings belong in settings.json.

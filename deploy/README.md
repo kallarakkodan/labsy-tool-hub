@@ -4,6 +4,18 @@ Deployment artifacts for Ubuntu Server 24.04 LTS (PRD §12). Provisioning the
 host itself — users, packages, ACLs, the NPM proxy host — is issue 35's
 runbook; this directory holds the files that runbook installs.
 
+## Two ways to deploy
+
+| Method | Guide | When |
+|---|---|---|
+| **Bare metal, via systemd** | [`INSTALL.md`](./INSTALL.md) | Follows PRD §12 exactly — `labsy` system user, `ProtectSystem=strict` sandboxing, the app running directly on the host. One script (`install.sh`) provisions and deploys from a git checkout; safe to re-run for upgrades. |
+| **Docker** | [`docker/DOCKER.md`](./docker/DOCKER.md) | Faster to stand up, isolates the app in a container. `docker compose up -d --build` after filling in two secrets. |
+
+Both need this repo pushed to a git host reachable from the target machine
+first — it ships with no remote configured. Both cover installation and
+configuration end-to-end in their own guide; this file only indexes the raw
+files underneath.
+
 ## Files
 
 | File | Installs to | Purpose |
@@ -15,11 +27,17 @@ runbook; this directory holds the files that runbook installs.
 | `labsy-hub-sweep.timer` | `/etc/systemd/system/labsy-hub-sweep.timer` | Triggers the sweep service weekly, Sunday 03:00. |
 | `backup.sh` | `/opt/labsy-hub/deploy/backup.sh` (ships with the app checkout) | Nightly SQLite backup, gzipped, 14-day retention (PRD §12.7). |
 | `npm-advanced.conf` | Nowhere on this host | Pasted into Nginx Proxy Manager's proxy-host **Advanced** tab (PRD §12.5). Not read by any process here — there is no nginx on the app host (PRD §12.4). |
+| `install.sh` | Run once on the target host, not installed anywhere | Provisions and deploys the bare-metal method end-to-end — see [`INSTALL.md`](./INSTALL.md). |
+| `docker/` | — | The Docker method's `entrypoint.sh` and `gen-hash.cjs` — see [`docker/DOCKER.md`](./docker/DOCKER.md). The `Dockerfile` and `docker-compose.yml` themselves live at the repo root. |
 
 There is deliberately no `nginx.conf` in this directory — see the note above
 and PRD §16's resolved-decisions log.
 
 ## Installing the systemd units
+
+`install.sh` does this step automatically — the manual version below is for
+reference, or for installing/updating just the units without the rest of what
+the script does.
 
 ```bash
 sudo cp deploy/labsy-hub.service deploy/labsy-hub-backup.service \
