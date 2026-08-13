@@ -1,0 +1,18 @@
+[Unit]
+Description=Labsy Tool Hub — nightly database backup
+After=labsy-hub.service
+
+[Service]
+Type=oneshot
+User=labsy
+Group=labsy
+EnvironmentFile=/etc/labsy-hub/env
+ExecStart=/opt/labsy-hub/deploy/backup.sh
+
+# Same sandboxing philosophy as the main service (PRD §12.3) — the backup job
+# only ever needs to read the database and write the backup directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/labsy-hub

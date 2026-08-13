@@ -1,6 +1,6 @@
 # 34 — deploy/: systemd unit, timers, backup script
 
-Status: ready-for-agent
+Status: ready-for-human
 Phase: P5
 Blocked by: 33, 32
 Spec: PRD §12.3, PRD §12.7, PRD §13 row 14, PRD §10
@@ -31,10 +31,46 @@ past issue 08 still cannot write outside the storage root.
 
 ## Done when
 
-- [ ] `systemd-analyze verify deploy/labsy-hub.service` passes
-- [ ] `backup.sh` produces a restorable gzipped copy and prunes past 14 days
+- [ ] `systemd-analyze verify deploy/labsy-hub.service` passes — **not
+      verified**; see Comments
+- [x] `backup.sh` produces a restorable gzipped copy and prunes past 14 days —
+      verified with real `sqlite3`/`gzip`/`find` against a throwaway sandbox
+      DB: backed up, gunzipped, restored, and queried back the seeded row;
+      separately confirmed a synthetic 2020-dated backup gets pruned on the
+      next run and a fresh one does not
 - [ ] The service cannot write outside `/srv/downloads` and `/var/lib/labsy-hub`
-      (PRD §14) — verified by attempting a write in issue 36
+      (PRD §14) — verified by attempting a write in issue 36 (unchanged, as scoped)
+
+## Comments
+
+`systemd` is Linux-only and this machine is macOS, so `systemd-analyze verify`
+itself could not run directly. Tried running it inside a Docker container
+(`ubuntu:24.04` + `apt-get install systemd`) three times; Docker Desktop's
+networking never came up cleanly in this session — even a bare `docker pull
+hello-world` hung indefinitely and had to be killed. That is an environment
+problem, not a finding about the unit files.
+
+What did happen instead: a careful line-by-line read of every directive in
+all five unit files against known systemd syntax — section headers, one
+directive per line, comments only ever on their own line (never trailing
+after a value, which the literal PRD §12.3 markdown snippet renders as an
+inline `#` comment that would NOT be valid systemd syntax — written here as a
+separate comment line above `ExecStart` instead, per the issue's own "watch
+out": "ship the localhost default and comment the alternative"). All the
+hardening directives from PRD §12.3 are present, in the same order, same
+values.
+
+This is short of the issue's literal bar. Marked `ready-for-human` for a
+`systemd-analyze verify` pass on an actual Linux box (or a working Docker
+setup) before this is trusted — everything else (`backup.sh`'s actual
+behaviour, the file contents, the README) is either verified or a faithful
+transcription of the spec.
+
+Chose the "standalone script over systemd calling an HTTP endpoint" split
+consistently: `labsy-hub-sweep.service` runs `scripts/sweep-file-missing.ts`
+directly via `node node_modules/.bin/tsx`, the same pattern issue 33 already
+settled on and the same `node node_modules/.bin/X` invocation style the main
+`labsy-hub.service` already uses for `next start`.
 
 ## Watch out
 

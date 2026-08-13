@@ -1,0 +1,37 @@
+[Unit]
+Description=Labsy Tool Hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=labsy
+Group=labsy
+WorkingDirectory=/opt/labsy-hub
+EnvironmentFile=/etc/labsy-hub/env
+
+# Binds loopback only, because Nginx Proxy Manager is co-located on this host
+# (PRD §12.4) and reaches Node over 127.0.0.1. If NPM ever runs on a different
+# host, bind the LAN interface instead — e.g. replace the line below with:
+#   ExecStart=/usr/bin/node node_modules/.bin/next start -p 3000 -H 10.0.0.5
+ExecStart=/usr/bin/node node_modules/.bin/next start -p 3000 -H 127.0.0.1
+Restart=always
+RestartSec=5
+
+# Sandboxing (PRD §12.3, issue 34's "Why"): defence in depth for the one class
+# of bug — path traversal — that would otherwise be catastrophic. A traversal
+# that slips past issue 08's boundary still cannot write outside the storage
+# root, because there is nowhere else on the filesystem it is allowed to write.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/downloads /var/lib/labsy-hub
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

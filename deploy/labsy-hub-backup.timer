@@ -1,0 +1,11 @@
+[Unit]
+Description=Labsy Tool Hub — nightly database backup timer
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+# Runs the missed backup on the next boot if the host was off at 02:00 —
+# a backup job silently skipping a night is worse than one running late.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
