@@ -430,6 +430,23 @@ export async function toRelative(absolute: string): Promise<string> {
   return path.relative(await getRoot(), absolute);
 }
 
+/**
+ * Whether an already-registered `Tool.filePath` still resolves to a readable
+ * regular file (PRD §11.3, issue 33) — the read-only twin of `resolveStoredPath`
+ * for the integrity sweep, which needs a boolean to act on rather than a
+ * PathError to interpret. Never throws, and touches nothing on disk beyond the
+ * `stat` itself.
+ */
+export async function fileStillExists(absolute: string): Promise<boolean> {
+  try {
+    const real = await resolveStoredPath(absolute);
+    const stat = await fs.stat(real);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
 export interface DirectoryEntry {
   name: string;
   type: "dir" | "file";

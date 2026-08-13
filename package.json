@@ -19,6 +19,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:clear": "tsx prisma/seed.ts --clear",
     "gen:hash": "tsx scripts/gen-hash.ts",
+    "sweep:file-missing": "tsx scripts/sweep-file-missing.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

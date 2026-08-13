@@ -1,6 +1,6 @@
 # 33 — fileMissing integrity sweep
 
-Status: ready-for-agent
+Status: resolved
 Phase: P5
 Blocked by: 22
 Spec: PRD §11.3, PRD §13 row 6, PRD §16 D4
@@ -23,10 +23,28 @@ trust in the catalogue.
 
 ## Done when
 
-- [ ] Moving a registered file away flags it within one sweep; moving it back
-      clears the flag
-- [ ] A flagged tool renders as Unavailable and returns 410 (PRD §14)
-- [ ] The sweep never modifies anything on disk
+- [x] Moving a registered file away flags it within one sweep; moving it back
+      clears the flag — verified in tests and against the real dev.db and
+      real seeded files (moved one away, swept, restored it, swept again)
+- [x] A flagged tool renders as Unavailable and returns 410 (PRD §14) — already
+      shipped and tested (issues 12/16); the sweep is the new proactive half
+- [x] The sweep never modifies anything on disk
+
+## Comments
+
+Picked the standalone-script option over an admin-only route: this repo
+already has `scripts/gen-hash.ts` and `prisma/seed.ts` as precedent for `tsx`
+scripts run operationally, and a route would need the timer to somehow
+authenticate as an admin (store the shared password somewhere for cron to
+use) for no benefit — the script runs as the `labsy` system user directly
+against the DB and filesystem, no HTTP or session involved. `pnpm
+sweep:file-missing` is the entry point; issue 34's systemd timer unit will
+call it directly.
+
+`lib/storage.ts` gained `fileStillExists` — a non-throwing, read-only wrapper
+around `resolveStoredPath` — so the sweep's core loop (`lib/file-missing-sweep.ts`)
+never touches `fs` directly, consistent with every other module in this
+codebase.
 
 ## Watch out
 
