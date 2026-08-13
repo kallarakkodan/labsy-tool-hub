@@ -1,6 +1,6 @@
 # 34 — deploy/: systemd unit, timers, backup script
 
-Status: ready-for-human
+Status: resolved
 Phase: P5
 Blocked by: 33, 32
 Spec: PRD §12.3, PRD §12.7, PRD §13 row 14, PRD §10
@@ -31,8 +31,8 @@ past issue 08 still cannot write outside the storage root.
 
 ## Done when
 
-- [ ] `systemd-analyze verify deploy/labsy-hub.service` passes — **not
-      verified**; see Comments
+- [x] `systemd-analyze verify deploy/labsy-hub.service` passes — verified for
+      real (see Comments), not just by inspection
 - [x] `backup.sh` produces a restorable gzipped copy and prunes past 14 days —
       verified with real `sqlite3`/`gzip`/`find` against a throwaway sandbox
       DB: backed up, gunzipped, restored, and queried back the seeded row;
@@ -44,27 +44,22 @@ past issue 08 still cannot write outside the storage root.
 ## Comments
 
 `systemd` is Linux-only and this machine is macOS, so `systemd-analyze verify`
-itself could not run directly. Tried running it inside a Docker container
-(`ubuntu:24.04` + `apt-get install systemd`) three times; Docker Desktop's
-networking never came up cleanly in this session — even a bare `docker pull
-hello-world` hung indefinitely and had to be killed. That is an environment
-problem, not a finding about the unit files.
+couldn't run directly. Docker's networking was down on the first pass through
+this issue (three attempts failed, even a bare `hello-world` pull hung) —
+came back up later in the session, so re-ran it properly:
+`ubuntu:24.04` + `apt-get install systemd systemd-sysv`, then stubbed the
+paths every `ExecStart=` references (`/usr/bin/node`, `/opt/labsy-hub/deploy/backup.sh`,
+`node_modules/.bin/{next,tsx}`) as executable no-ops and created the `labsy`
+system user, so the check exercises real syntax and semantics — directive
+names, section structure, `User=`/`Group=` resolution — rather than failing
+on "this throwaway container doesn't have the real deploy tree" (which is
+what a bare `systemd-analyze verify` against a container with nothing
+installed reports: `Command /usr/bin/node is not executable: No such file or
+directory`, correctly, but not the check this issue actually wants).
 
-What did happen instead: a careful line-by-line read of every directive in
-all five unit files against known systemd syntax — section headers, one
-directive per line, comments only ever on their own line (never trailing
-after a value, which the literal PRD §12.3 markdown snippet renders as an
-inline `#` comment that would NOT be valid systemd syntax — written here as a
-separate comment line above `ExecStart` instead, per the issue's own "watch
-out": "ship the localhost default and comment the alternative"). All the
-hardening directives from PRD §12.3 are present, in the same order, same
-values.
-
-This is short of the issue's literal bar. Marked `ready-for-human` for a
-`systemd-analyze verify` pass on an actual Linux box (or a working Docker
-setup) before this is trusted — everything else (`backup.sh`'s actual
-behaviour, the file contents, the README) is either verified or a faithful
-transcription of the spec.
+All five unit files pass, individually and as one combined
+`systemd-analyze verify a.service b.service c.service a.timer b.timer` call,
+with zero warnings and exit 0.
 
 Chose the "standalone script over systemd calling an HTTP endpoint" split
 consistently: `labsy-hub-sweep.service` runs `scripts/sweep-file-missing.ts`
