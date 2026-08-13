@@ -9,9 +9,11 @@ import { slugify, toolCreateSchema } from "@/lib/validation";
 import type { ApiErrorBody, SerializedAdminTool } from "@/types";
 import { CategoryCombobox } from "./CategoryCombobox";
 import { ServerBrowserModal, type BrowseSelection } from "./ServerBrowserModal";
+import { UploadDropzone, type UploadCompletion } from "./UploadDropzone";
 
 /*
- * Add/Edit slide-over (PRD §8.3, issue 24; Browse Server wired in issue 27).
+ * Add/Edit slide-over (PRD §8.3, issue 24; Browse Server wired in issue 27;
+ * direct upload wired in issue 31).
  *
  * The form validates with `react-hook-form` for field-level UX (required,
  * length), but the gate that decides whether a request goes out is a manual
@@ -19,12 +21,9 @@ import { ServerBrowserModal, type BrowseSelection } from "./ServerBrowserModal";
  * `POST /api/admin/tools` re-parses (CONTEXT §6). That is deliberately not
  * wired up through `zodResolver`: `file` is a discriminated union, and
  * react-hook-form's path types do not resolve `"file.relativePath"` cleanly
- * against a union, so this form keeps a flat `serverPath` field and only
- * nests it into `{ source: "serverPath", relativePath }` at submit time.
- *
- * This issue ships Server Path only — the Upload tab stays visibly present but
- * disabled until issue 31. A manual paste into the path input still works and
- * is revalidated server-side regardless of how the value got there (PRD §8.3).
+ * against a union, so this form keeps a flat `serverPath` field for that
+ * branch and a separate `completedUpload` piece of state for the other,
+ * nesting whichever is active into the right shape at submit time.
  */
 
 interface FormValues {
@@ -93,6 +92,8 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
   const [browserOpen, setBrowserOpen] = useState(false);
   /** Size/mtime from a fresh Browse Server pick, shown until the path is edited by hand. */
   const [browsedInfo, setBrowsedInfo] = useState<{ size: string; mtime: string } | null>(null);
+  const [fileSourceMode, setFileSourceMode] = useState<"serverPath" | "upload">("serverPath");
+  const [completedUpload, setCompletedUpload] = useState<UploadCompletion | null>(null);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true));
@@ -133,6 +134,11 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
   async function onValid(values: FormValues) {
     setFormError(null);
 
+    if (fileSourceMode === "upload" && completedUpload === null) {
+      setFormError("Wait for the upload to finish, or switch to Server Path.");
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       name: values.name,
       description: values.description,
@@ -142,7 +148,10 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
       notes: values.notes.trim() === "" ? null : values.notes,
       published: values.published,
       visibility: values.visibility,
-      file: { source: "serverPath", relativePath: values.serverPath.trim() },
+      file:
+        fileSourceMode === "upload"
+          ? { source: "upload", uploadId: completedUpload!.uploadId }
+          : { source: "serverPath", relativePath: values.serverPath.trim() },
     };
 
     // Only a slug the admin actually typed is sent as a decision (CONTEXT §6 —
@@ -315,57 +324,71 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-fg">File source</span>
               <div className="flex w-fit rounded-button border border-border bg-inset p-0.5">
-                <span className="rounded-button bg-surface-hover px-3 py-1.5 text-xs font-medium text-fg">
-                  Server Path
-                </span>
-                <span
-                  title="Direct upload arrives with issue 31"
-                  className="cursor-not-allowed rounded-button px-3 py-1.5 text-xs font-medium text-fg-subtle"
-                >
-                  Upload
-                </span>
+                {(["serverPath", "upload"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setFileSourceMode(mode)}
+                    className={`rounded-button px-3 py-1.5 text-xs font-medium transition-colors ${
+                      fileSourceMode === mode
+                        ? "bg-surface-hover text-fg"
+                        : "text-fg-subtle hover:text-fg"
+                    }`}
+                  >
+                    {mode === "serverPath" ? "Server Path" : "Upload"}
+                  </button>
+                ))}
               </div>
 
-              <Field
-                label=""
-                htmlFor="tool-server-path"
-                error={errors.serverPath?.message}
-                hint="Relative to the storage root, e.g. isos/ubuntu-22.04.4-live-server-amd64.iso"
-              >
-                <div className="flex gap-2">
-                  <input
-                    id="tool-server-path"
-                    {...register("serverPath", {
-                      required: "select a file",
-                      maxLength: 4096,
-                      onChange: () => setBrowsedInfo(null),
-                    })}
-                    className={`${inputClass} flex-1 font-mono`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setBrowserOpen(true)}
-                    className="flex shrink-0 items-center gap-1.5 rounded-button border border-border
-                               bg-surface px-3 py-2 text-sm text-fg transition-colors
-                               hover:border-border-hover hover:bg-surface-hover focus-visible:outline-none
-                               focus-visible:ring-2 focus-visible:ring-accent/35"
+              {fileSourceMode === "serverPath" ? (
+                <>
+                  <Field
+                    label=""
+                    htmlFor="tool-server-path"
+                    error={errors.serverPath?.message}
+                    hint="Relative to the storage root, e.g. isos/ubuntu-22.04.4-live-server-amd64.iso"
                   >
-                    <FolderSearch className="size-4" aria-hidden="true" />
-                    Browse Server
-                  </button>
-                </div>
-              </Field>
-              {browsedInfo !== null ? (
-                <p className="font-mono text-xs text-fg-muted tabular-nums">
-                  {formatBytes(browsedInfo.size)} · {formatDate(browsedInfo.mtime)}
-                </p>
+                    <div className="flex gap-2">
+                      <input
+                        id="tool-server-path"
+                        {...register("serverPath", {
+                          required: fileSourceMode === "serverPath" ? "select a file" : false,
+                          maxLength: 4096,
+                          onChange: () => setBrowsedInfo(null),
+                        })}
+                        className={`${inputClass} flex-1 font-mono`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setBrowserOpen(true)}
+                        className="flex shrink-0 items-center gap-1.5 rounded-button border border-border
+                                   bg-surface px-3 py-2 text-sm text-fg transition-colors
+                                   hover:border-border-hover hover:bg-surface-hover focus-visible:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-accent/35"
+                      >
+                        <FolderSearch className="size-4" aria-hidden="true" />
+                        Browse Server
+                      </button>
+                    </div>
+                  </Field>
+                  {browsedInfo !== null ? (
+                    <p className="font-mono text-xs text-fg-muted tabular-nums">
+                      {formatBytes(browsedInfo.size)} · {formatDate(browsedInfo.mtime)}
+                    </p>
+                  ) : (
+                    tool !== undefined &&
+                    serverPath === tool.filePath && (
+                      <p className="font-mono text-xs text-fg-muted tabular-nums">
+                        Current file — {tool.fileName}
+                      </p>
+                    )
+                  )}
+                </>
               ) : (
-                tool !== undefined &&
-                serverPath === tool.filePath && (
-                  <p className="font-mono text-xs text-fg-muted tabular-nums">
-                    Current file — {tool.fileName}
-                  </p>
-                )
+                <UploadDropzone
+                  onCompleted={(result) => setCompletedUpload(result)}
+                  onReset={() => setCompletedUpload(null)}
+                />
               )}
             </div>
 
@@ -450,7 +473,10 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
           </button>
           <button
             type="submit"
-            disabled={submitting || serverPath.trim() === ""}
+            disabled={
+              submitting ||
+              (fileSourceMode === "serverPath" ? serverPath.trim() === "" : completedUpload === null)
+            }
             className="flex items-center gap-2 rounded-button bg-accent px-4 py-2 text-sm font-medium
                        text-base transition-colors hover:bg-accent-hover focus-visible:outline-none
                        focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-not-allowed

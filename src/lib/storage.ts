@@ -6,6 +6,7 @@ import { once } from "node:events";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
+import { expectedChunkSize } from "@/lib/chunking";
 import { getEnv } from "@/lib/env";
 
 /*
@@ -246,10 +247,7 @@ export async function verifyUploadParts(
   totalSize: bigint,
 ): Promise<void> {
   for (let index = 0; index < totalChunks; index++) {
-    const expected =
-      index === totalChunks - 1
-        ? Number(totalSize - BigInt(chunkSize) * BigInt(totalChunks - 1))
-        : chunkSize;
+    const expected = expectedChunkSize(index, totalChunks, chunkSize, Number(totalSize));
 
     let stat;
     try {
