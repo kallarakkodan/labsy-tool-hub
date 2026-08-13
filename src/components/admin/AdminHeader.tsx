@@ -23,10 +23,10 @@ export function AdminHeader() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
-      // The proxy guard reads the cookie fresh on the next navigation, so a
-      // hard redirect here would work too — router.refresh() is enough
-      // because /admin/login's own server component re-checks isAdmin().
-      router.push("/admin/login");
+      // Land on the public catalog, not the admin sign-in page — a signed-out
+      // visitor is just a normal user again, and should be able to browse and
+      // download without being shown an admin-only screen first.
+      router.push("/");
       router.refresh();
     }
   }
