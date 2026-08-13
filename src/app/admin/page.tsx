@@ -1,3 +1,4 @@
+import { AdminHeader } from "@/components/admin/AdminHeader";
 import { Dashboard } from "@/components/admin/Dashboard";
 import { listAdminTools } from "@/lib/admin-tools";
 
@@ -20,6 +21,8 @@ export const metadata = {
  * There is deliberately no `admin/layout.tsx`. A layout would also wrap
  * `/admin/login`, and admin chrome around a sign-in form — nav links a
  * signed-out visitor cannot use — is a worse surface than repeating a header.
+ * `AdminHeader` is that repeated header: rendered directly here, not in a
+ * layout, so `/admin/login` never sees it.
  */
 export default async function AdminPage() {
   const { tools, categories } = await listAdminTools({
@@ -45,6 +48,7 @@ export default async function AdminPage() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
+      <AdminHeader />
       <Dashboard tools={tools} categories={categories} nowMs={nowMs} />
     </main>
   );

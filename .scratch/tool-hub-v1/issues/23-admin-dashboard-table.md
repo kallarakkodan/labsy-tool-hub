@@ -119,3 +119,10 @@ string. It goes stale until the next refresh, which is the right trade here.
 anything server-rendered. The `react-hooks/purity` rule flags the clock read; it
 is disabled at that one line with the reason, because a `force-dynamic` Server
 Component renders once per request and the impurity is the point.
+
+## Comments
+
+**Follow-up:** `admin/page.tsx` now also renders `AdminHeader` above
+`Dashboard` — a sign-out control that was missing entirely (found by
+hand-testing a real deployment). Full reasoning is on issue 20, where the
+logout route this calls was originally built with no UI ever wired to it.

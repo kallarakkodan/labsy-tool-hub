@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { HardDriveDownload } from "lucide-react";
+import { HardDriveDownload, LogIn } from "lucide-react";
 import { HealthDot } from "./HealthDot";
 import { SearchInput } from "./SearchInput";
 
@@ -29,8 +29,25 @@ export function Header() {
           </Suspense>
         </div>
 
-        <div className="flex shrink-0 items-center">
+        <div className="flex shrink-0 items-center gap-3">
           <HealthDot />
+          {/*
+           * Not in PRD §7.1's header spec — added because there was otherwise
+           * no way into /admin short of typing the URL by hand. `src/proxy.ts`
+           * already sends a signed-out visitor to /admin/login?next=/admin and
+           * an already-signed-in one straight to the dashboard, so this one
+           * link is correct in both states without knowing which applies.
+           */}
+          <Link
+            href="/admin"
+            aria-label="Admin sign-in"
+            title="Admin"
+            className="rounded-button p-1.5 text-fg-subtle transition-colors hover:bg-surface-hover
+                       hover:text-fg focus-visible:outline-none focus-visible:ring-2
+                       focus-visible:ring-accent/35"
+          >
+            <LogIn className="size-4" aria-hidden="true" />
+          </Link>
         </div>
       </div>
     </header>

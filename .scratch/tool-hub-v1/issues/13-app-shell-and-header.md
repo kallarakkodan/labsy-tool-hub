@@ -72,6 +72,22 @@ The 6px dot is one of PRD §5.3's two `rounded-full` exceptions, carrying an
 `eslint-disable-next-line` that names the exemption — the convention issue 02
 deferred to whichever component needed it first.
 
+## Comments
+
+**Follow-up, found by hand-testing a real deployment (issue 34's container):**
+this issue's own "Answer" claims "`/admin` has its own chrome (PRD §10)" as
+the reason the public header lives in a `(public)` route group — but no admin
+chrome was ever built (see issue 20's comment), and this public header had no
+link to `/admin` at all. Signing in required typing the URL by hand.
+
+Added a small icon-only link (`LogIn`, `lucide-react`) to the header's right
+section, next to the health dot. Not in PRD §7.1's spec — deliberately minimal
+so it doesn't compete with the search-centric layout the spec describes.
+Points at `/admin` rather than `/admin/login` directly: `src/proxy.ts` already
+sends a signed-out visitor to `/admin/login?next=/admin` and an already-signed-in
+one straight through, so one link is correct in both auth states without the
+Server Component needing to know which applies.
+
 ### Two lint errors worth the fix rather than a suppression
 
 Next 16's `react-hooks/set-state-in-effect` rejected both of my first attempts,

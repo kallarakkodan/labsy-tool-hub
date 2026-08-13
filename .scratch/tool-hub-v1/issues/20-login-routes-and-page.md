@@ -102,3 +102,20 @@ the two loaders must agree on one env line. `pnpm gen:hash` prints the escaped
 form. `.env.example` and CONTEXT §3 say why. The test fixtures that used
 `"scrypt$placeholder"` are now well-formed dummies, and issue 35 carries the note
 for the production runbook.
+
+## Comments
+
+**Follow-up, found by hand-testing a real deployment (issue 34's container):**
+`POST /api/auth/logout` was built and verified here (see the curl transcript
+above), but nothing in the UI ever called it — no sign-out control existed
+anywhere in the admin panel. An admin could get in, but the only way out was
+to clear cookies by hand or wait 8 hours for the session to expire.
+
+Added `src/components/admin/AdminHeader.tsx` — a small header rendered
+directly by `admin/page.tsx` (issue 23), not a shared `admin/layout.tsx`, for
+the same reason that page's own comment already gives: a layout would also
+wrap `/admin/login`, and nav a signed-out visitor cannot use is worse than
+each authenticated page repeating a header. Its Sign Out button posts to
+`/api/auth/logout`, then `router.push("/admin/login")` + `router.refresh()`
+so the login page's own `isAdmin()` check (already the source of truth) sees
+the cleared cookie rather than the client guessing at auth state.
