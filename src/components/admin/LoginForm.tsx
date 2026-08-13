@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { LoaderCircle, LockKeyhole } from "lucide-react";
 
 /*
@@ -26,7 +25,6 @@ type State =
 const DEFAULT_LOCK_SECONDS = 15 * 60;
 
 export function LoginForm({ next }: { next: string }) {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
   const [lockSeconds, setLockSeconds] = useState(0);
@@ -63,14 +61,19 @@ export function LoginForm({ next }: { next: string }) {
     if (response.ok) {
       setPassword("");
       /*
-       * `refresh()` before navigating: `/admin` is a Server Component that reads
-       * the session cookie, and without dropping the cached RSC payload the
-       * router can render the pre-login version of a page it already has.
-       * `state` stays "submitting" so the button does not flash back to idle
-       * underneath the navigation.
+       * A hard navigation, not `router.replace()`: the soft client-side router
+       * fetches the destination's RSC payload itself, fire-and-forget, with no
+       * error handling or timeout anywhere in this component — if that fetch is
+       * slow or fails (a flaky proxy hop, a loaded host, anything transient),
+       * the promise just never resolves and the button is stuck on "Signing in"
+       * forever with no way out. `window.location.assign` is a plain browser
+       * navigation instead: the browser's own request/retry/error handling
+       * applies, and it can never leave this component in a stuck state because
+       * the component itself is about to be torn down either way. It also reads
+       * the session cookie fresh by construction, so there is no stale-RSC-cache
+       * concern `router.refresh()` existed to work around.
        */
-      router.refresh();
-      router.replace(next);
+      window.location.assign(next);
       return;
     }
 
