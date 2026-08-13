@@ -22,6 +22,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.7.1",
     "@prisma/adapter-better-sqlite3": "7.9.1",
     "@prisma/client": "^7.9.1",
     "@tanstack/react-table": "^9.1.2",
@@ -30,6 +31,7 @@
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-hook-form": "^7.85.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

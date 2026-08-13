@@ -1,6 +1,6 @@
 # 24 — Add/Edit slide-over form (Server Path source)
 
-Status: ready-for-agent
+Status: resolved
 Phase: P2
 Blocked by: 23
 Spec: PRD §8.3, CONTEXT §6 (shared Zod), CONTEXT §5 (input recipe)
@@ -33,10 +33,10 @@ pre-staged file end to end, in under 30 seconds, with no bytes copied.
 
 ## Done when
 
-- [ ] Create from a server path appears in the public catalogue immediately
-- [ ] Closing with unsaved changes prompts; closing clean does not
-- [ ] Slug uniqueness conflict is surfaced on blur, before submit
-- [ ] An invalid pasted path is rejected by the server with a readable message
+- [x] Create from a server path appears in the public catalogue immediately
+- [x] Closing with unsaved changes prompts; closing clean does not
+- [x] Slug uniqueness conflict is surfaced on blur, before submit
+- [x] An invalid pasted path is rejected by the server with a readable message
 
 ## Watch out
 

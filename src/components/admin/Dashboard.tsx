@@ -13,6 +13,7 @@ import {
 import type { CategoryCount } from "@/lib/tools";
 import type { SerializedAdminTool } from "@/types";
 import { AdminToolbar } from "./AdminToolbar";
+import { ToolFormSlideOver } from "./ToolFormSlideOver";
 import { ToolsTable } from "./ToolsTable";
 
 /*
@@ -31,16 +32,27 @@ interface Props {
   nowMs: number;
 }
 
+type FormTarget = { mode: "create" } | { mode: "edit"; tool: SerializedAdminTool };
+
 export function Dashboard({ tools, categories, nowMs }: Props) {
   const router = useRouter();
   const [filters, setFilters] = useState<AdminFilters>(EMPTY_ADMIN_FILTERS);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
 
   const visible = useMemo(
     () => applyAdminFilters(tools, filters, new Date(nowMs)),
     [tools, filters, nowMs],
   );
+
+  // Every other tool's slug, lowercased — the slide-over's on-blur uniqueness
+  // check runs against this rather than a network round trip (CONTEXT §6: tens
+  // of rows, not thousands).
+  const existingSlugs = useMemo(() => {
+    const editingId = formTarget?.mode === "edit" ? formTarget.tool.id : null;
+    return new Set(tools.filter((t) => t.id !== editingId).map((t) => t.slug.toLowerCase()));
+  }, [tools, formTarget]);
 
   /**
    * Duplicate as a draft (PRD §8.2's `Copy` action).
@@ -97,12 +109,10 @@ export function Dashboard({ tools, categories, nowMs }: Props) {
 
         <button
           type="button"
-          disabled
-          title="The add/edit slide-over arrives with issue 24"
+          onClick={() => setFormTarget({ mode: "create" })}
           className="flex items-center gap-1.5 rounded-button bg-accent px-4 py-2 text-sm font-medium
                      text-base transition-colors hover:bg-accent-hover focus-visible:outline-none
-                     focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-not-allowed
-                     disabled:opacity-50"
+                     focus-visible:ring-2 focus-visible:ring-accent/35"
         >
           <Plus className="size-4" aria-hidden="true" />
           Add New Tool
@@ -130,7 +140,30 @@ export function Dashboard({ tools, categories, nowMs }: Props) {
       ) : visible.length === 0 ? (
         <NoMatches filters={filters} onClear={() => setFilters(EMPTY_ADMIN_FILTERS)} />
       ) : (
-        <ToolsTable tools={visible} meta={{ onDuplicate: duplicate, busyId, nowMs }} />
+        <ToolsTable
+          tools={visible}
+          meta={{
+            onEdit: (tool) => setFormTarget({ mode: "edit", tool }),
+            onDuplicate: duplicate,
+            busyId,
+            nowMs,
+          }}
+        />
+      )}
+
+      {formTarget !== null && (
+        <ToolFormSlideOver
+          key={formTarget.mode === "edit" ? formTarget.tool.id : "create"}
+          mode={formTarget.mode}
+          tool={formTarget.mode === "edit" ? formTarget.tool : undefined}
+          categories={categories}
+          existingSlugs={existingSlugs}
+          onClose={() => setFormTarget(null)}
+          onSaved={() => {
+            setFormTarget(null);
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );
