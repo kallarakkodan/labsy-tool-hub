@@ -76,6 +76,29 @@ export interface ApiErrorBody {
   };
 }
 
+/**
+ * `GET /api/browse` (PRD §9.3, issue 26). A client-safe mirror of
+ * `lib/storage.ts`'s `DirectoryEntry`/`DirectoryListing` — kept separate so a
+ * "use client" component never has a reason to import from a module that pulls
+ * in `node:fs` (CONTEXT §2 item 2).
+ */
+export interface BrowseEntry {
+  name: string;
+  type: "dir" | "file";
+  /** Bytes, as a decimal string — null for directories. */
+  size: string | null;
+  mtime: string;
+  ext?: string;
+}
+
+export interface BrowseListing {
+  /** Relative to STORAGE_ROOT. Never the absolute host path (PRD §8.4). */
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
+  truncated: boolean;
+}
+
 /** `GET /api/admin/tools/[id]/delete-eligibility` (PRD §8.2, issue 25). */
 export interface DeleteEligibility {
   eligible: boolean;

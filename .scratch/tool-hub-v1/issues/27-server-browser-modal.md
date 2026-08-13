@@ -1,6 +1,6 @@
 # 27 — Server file browser modal, wired into the form
 
-Status: ready-for-agent
+Status: resolved
 Phase: P3
 Blocked by: 26, 24
 Spec: PRD §8.4, CONTEXT §8 step 8
@@ -29,11 +29,11 @@ above it." This is Arun's whole workflow.
 
 ## Done when
 
-- [ ] Navigating into subdirectories and back up works; root has no parent
+- [x] Navigating into subdirectories and back up works; root has no parent
       (PRD §14)
-- [ ] A permission-denied directory shows the named error inline, not a crash
-- [ ] `.uploads` is never listed
-- [ ] Selecting a file and saving the form creates a working catalogue entry
+- [x] A permission-denied directory shows the named error inline, not a crash
+- [x] `.uploads` is never listed
+- [x] Selecting a file and saving the form creates a working catalogue entry
 
 ## Watch out
 

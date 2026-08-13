@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { FolderSearch, Image as ImageIcon, LoaderCircle, X } from "lucide-react";
+import { formatBytes, formatDate } from "@/lib/format";
 import type { CategoryCount } from "@/lib/tools";
 import { slugify, toolCreateSchema } from "@/lib/validation";
 import type { ApiErrorBody, SerializedAdminTool } from "@/types";
 import { CategoryCombobox } from "./CategoryCombobox";
+import { ServerBrowserModal, type BrowseSelection } from "./ServerBrowserModal";
 
 /*
- * Add/Edit slide-over (PRD §8.3, issue 24).
+ * Add/Edit slide-over (PRD §8.3, issue 24; Browse Server wired in issue 27).
  *
  * The form validates with `react-hook-form` for field-level UX (required,
  * length), but the gate that decides whether a request goes out is a manual
@@ -20,9 +22,9 @@ import { CategoryCombobox } from "./CategoryCombobox";
  * against a union, so this form keeps a flat `serverPath` field and only
  * nests it into `{ source: "serverPath", relativePath }` at submit time.
  *
- * This issue ships Server Path only — the Upload tab is visibly present but
- * disabled until issue 31, and the Browse Server button until issue 27, so a
- * manual paste is the only way in for now (both PRD-sanctioned fallbacks).
+ * This issue ships Server Path only — the Upload tab stays visibly present but
+ * disabled until issue 31. A manual paste into the path input still works and
+ * is revalidated server-side regardless of how the value got there (PRD §8.3).
  */
 
 interface FormValues {
@@ -88,6 +90,9 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
   const [formError, setFormError] = useState<string | null>(null);
   const [entered, setEntered] = useState(false);
   const [iconBroken, setIconBroken] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  /** Size/mtime from a fresh Browse Server pick, shown until the path is edited by hand. */
+  const [browsedInfo, setBrowsedInfo] = useState<{ size: string; mtime: string } | null>(null);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true));
@@ -95,13 +100,16 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
   }, []);
 
   useEffect(() => {
+    // Skipped while the browse modal is open, which has its own Escape handler
+    // (both listen on `document`) — otherwise one keypress would close the
+    // browser *and* trigger this form's dirty-state confirm in the same beat.
     function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") requestClose();
+      if (event.key === "Escape" && !browserOpen) requestClose();
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDirty]);
+  }, [isDirty, browserOpen]);
 
   function requestClose() {
     if (isDirty && !window.confirm("Discard unsaved changes?")) return;
@@ -115,6 +123,12 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
 
   const iconUrlValid =
     iconUrl.trim() !== "" && (/^https?:\/\//.test(iconUrl.trim()) || iconUrl.trim().startsWith("/"));
+
+  function handleBrowseSelect(file: BrowseSelection) {
+    setValue("serverPath", file.relativePath, { shouldDirty: true, shouldValidate: true });
+    setBrowsedInfo({ size: file.size, mtime: file.mtime });
+    setBrowserOpen(false);
+  }
 
   async function onValid(values: FormValues) {
     setFormError(null);
@@ -321,26 +335,37 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
                 <div className="flex gap-2">
                   <input
                     id="tool-server-path"
-                    {...register("serverPath", { required: "select a file", maxLength: 4096 })}
+                    {...register("serverPath", {
+                      required: "select a file",
+                      maxLength: 4096,
+                      onChange: () => setBrowsedInfo(null),
+                    })}
                     className={`${inputClass} flex-1 font-mono`}
                   />
                   <button
                     type="button"
-                    disabled
-                    title="The server file browser arrives with issue 27 — paste a path for now"
+                    onClick={() => setBrowserOpen(true)}
                     className="flex shrink-0 items-center gap-1.5 rounded-button border border-border
-                               bg-surface px-3 py-2 text-sm text-fg-muted disabled:cursor-not-allowed
-                               disabled:opacity-50"
+                               bg-surface px-3 py-2 text-sm text-fg transition-colors
+                               hover:border-border-hover hover:bg-surface-hover focus-visible:outline-none
+                               focus-visible:ring-2 focus-visible:ring-accent/35"
                   >
                     <FolderSearch className="size-4" aria-hidden="true" />
                     Browse Server
                   </button>
                 </div>
               </Field>
-              {tool !== undefined && serverPath === tool.filePath && (
+              {browsedInfo !== null ? (
                 <p className="font-mono text-xs text-fg-muted tabular-nums">
-                  Current file — {tool.fileName}
+                  {formatBytes(browsedInfo.size)} · {formatDate(browsedInfo.mtime)}
                 </p>
+              ) : (
+                tool !== undefined &&
+                serverPath === tool.filePath && (
+                  <p className="font-mono text-xs text-fg-muted tabular-nums">
+                    Current file — {tool.fileName}
+                  </p>
+                )
               )}
             </div>
 
@@ -436,6 +461,16 @@ export function ToolFormSlideOver({ mode, tool, categories, existingSlugs, onClo
           </button>
         </div>
       </form>
+
+      {/*
+       * A sibling of `<form>`, not a child of it: the form carries the slide-in
+       * `transition-transform`, which makes it a containing block for any
+       * `position: fixed` descendant. Nesting the modal inside would clip its
+       * viewport-wide overlay to the 560px panel instead of covering the screen.
+       */}
+      {browserOpen && (
+        <ServerBrowserModal onClose={() => setBrowserOpen(false)} onSelect={handleBrowseSelect} />
+      )}
     </div>
   );
 }
