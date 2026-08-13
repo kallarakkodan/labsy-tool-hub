@@ -1,6 +1,6 @@
 # 26 — GET /api/browse
 
-Status: ready-for-agent
+Status: resolved
 Phase: P3
 Blocked by: 09, 21
 Spec: PRD §9.3, PRD §11.1, CONTEXT §8 step 8
@@ -25,11 +25,11 @@ The endpoint that exposes the filesystem to a client. It ships only after issue
 
 ## Done when
 
-- [ ] Every attack in PRD §11.1 returns 400/403 through this endpoint, not just
+- [x] Every attack in PRD §11.1 returns 400/403 through this endpoint, not just
       through the unit-tested library
-- [ ] `.uploads` never appears in a listing (PRD §14)
-- [ ] An unreadable directory returns a named permission error, not a crash
-- [ ] Directories sort before files, each alphabetically
+- [x] `.uploads` never appears in a listing (PRD §14)
+- [x] An unreadable directory returns a named permission error, not a crash
+- [x] Directories sort before files, each alphabetically
 
 ## Watch out
 

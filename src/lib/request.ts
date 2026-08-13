@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { SESSION_COOKIE } from "@/lib/auth";
 
 /*
  * Facts about an incoming request that are only safe to read one particular way
@@ -75,6 +76,36 @@ function normalizeIp(raw: string): string | null {
   if (zone !== -1) value = value.slice(0, zone);
 
   return isIP(value) === 0 ? null : value.toLowerCase();
+}
+
+/** The key used when no session cookie is present. */
+export const UNKNOWN_SESSION = "unknown";
+
+/**
+ * The raw session cookie value, for use as a rate-limit key (`lib/rate-limit.ts`'s
+ * `browse` and `uploadInit` limits are "keyed by session").
+ *
+ * Every request from the same signed-in browser carries the same cookie value
+ * until the next login, so this buckets one admin's own clicking rather than —
+ * as keying on `clientIp()` would — the whole LAN behind whatever address NPM
+ * reports (PRD §12.4).
+ *
+ * Deliberately the *raw* token, not the decrypted session: decrypting here would
+ * duplicate `unsealToken` for no benefit, since every caller of this function is
+ * behind `src/proxy.ts`'s guard (issue 21) and an invalid or expired cookie never
+ * reaches it. This is a rate-limit key, not an authorization decision.
+ */
+export function sessionKey(request: Request): string {
+  const cookie = request.headers.get("cookie");
+  if (cookie === null) return UNKNOWN_SESSION;
+
+  for (const part of cookie.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === SESSION_COOKIE) return part.slice(eq + 1).trim();
+  }
+
+  return UNKNOWN_SESSION;
 }
 
 /** Where an unvalidated `?next=` lands. */

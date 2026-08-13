@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { UNKNOWN_IP, clientIp, safeNextPath } from "../src/lib/request";
+import { UNKNOWN_IP, UNKNOWN_SESSION, clientIp, safeNextPath, sessionKey } from "../src/lib/request";
 
 /*
  * CONTEXT §2 item 6. The failure this guards is quiet: a limiter keyed on an
@@ -57,6 +57,26 @@ describe("clientIp", () => {
   it("returns the sentinel when there is nothing usable at all", () => {
     expect(clientIp(withHeaders({}))).toBe(UNKNOWN_IP);
     expect(clientIp(withHeaders({ "x-forwarded-for": "nope", "x-real-ip": "also-nope" }))).toBe(UNKNOWN_IP);
+  });
+});
+
+describe("sessionKey", () => {
+  it("reads the labsy_session cookie's value", () => {
+    expect(sessionKey(withHeaders({ cookie: "labsy_session=abc123" }))).toBe("abc123");
+  });
+
+  it("finds it among other cookies, in either position", () => {
+    expect(sessionKey(withHeaders({ cookie: "theme=dark; labsy_session=abc123" }))).toBe("abc123");
+    expect(sessionKey(withHeaders({ cookie: "labsy_session=abc123; theme=dark" }))).toBe("abc123");
+  });
+
+  it("does not match a cookie whose name merely contains labsy_session", () => {
+    expect(sessionKey(withHeaders({ cookie: "not_labsy_session=abc123" }))).toBe(UNKNOWN_SESSION);
+  });
+
+  it("falls back to the sentinel with no cookie header, or none matching", () => {
+    expect(sessionKey(withHeaders({}))).toBe(UNKNOWN_SESSION);
+    expect(sessionKey(withHeaders({ cookie: "theme=dark" }))).toBe(UNKNOWN_SESSION);
   });
 });
 
